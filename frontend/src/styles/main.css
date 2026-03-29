@@ -1,0 +1,46 @@
+/* src/styles/main.css */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  overflow: hidden;
+  background-color: #050505;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+#canvas-container {
+  position: fixed;
+  inset: 0;
+}
+
+#ui {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  color: white;
+  background: rgba(20, 20, 20, 0.9);
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid #333;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+
+#ui h2 {
+  margin: 0 0 5px 0;
+  font-size: 18px;
+  color: #00aaff;
+}
+
+#status {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+#status .error {
+  color: #ff4444;
+  opacity: 1;
+}

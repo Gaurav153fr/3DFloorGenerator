@@ -1,72 +1,44 @@
-import * as THREE from 'three';
-function createWall(start, end, height = 3) {
-  const length = Math.hypot(end[0] - start[0], end[1] - start[1]);
+// src/main.js  —  Application entry point
 
-  const geometry = new THREE.BoxGeometry(length, height, 0.2);
-  const material = new THREE.MeshStandardMaterial({ color: 0x888888 });
+import { createScene }          from './scene/SceneManager.js';
+import { createRenderer }       from './scene/RendererManager.js';
+import { createCamera }         from './scene/CameraManager.js';
+import { setupLighting }        from './scene/LightingManager.js';
+import { createGround }         from './scene/Ground.js';
+import { buildWalls }           from './builders/WallBuilder.js';
+import { fetchWallData }        from './services/floorPlanApi.js';
+import { startAnimationLoop }   from './core/AnimationLoop.js';
+import { setupResizeHandler }   from './core/ResizeHandler.js';
+import { setStatus, setSuccess, setError } from './ui/StatusUI.js';
 
-  const wall = new THREE.Mesh(geometry, material);
+async function init() {
+  setStatus('Initializing scene...');
 
-  // position (center of line)
-  wall.position.set(
-    (start[0] + end[0]) / 2,
-    height / 2,
-    (start[1] + end[1]) / 2
-  );
+  // 1. Core three.js setup
+  const { scene }              = createScene();
+  const { renderer }           = createRenderer(document.getElementById('canvas-container'));
+  const { camera, controls }   = createCamera(renderer);
 
-  // rotation
-  const angle = Math.atan2(end[1] - start[1], end[0] - start[0]);
-  wall.rotation.y = -angle;
+  // 2. Environment
+  setupLighting(scene);
+  createGround(scene);
 
-  scene.add(wall);
+  // 3. Start render loop immediately (shows environment before data loads)
+  startAnimationLoop(renderer, scene, camera, controls);
+
+  // 4. Responsive canvas
+  setupResizeHandler(camera, renderer);
+
+  // 5. Fetch and build walls from the API
+  setStatus('Fetching floor plan data...');
+  try {
+    const wallData = await fetchWallData();
+    buildWalls(scene, wallData);
+    setSuccess(wallData.length);
+  } catch (err) {
+    console.error('[FloorPlan] Failed to load wall data:', err);
+    setError(err.message);
+  }
 }
 
-// Scene
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xf0f0f0);
-
-// Camera
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  1000
-);
-camera.position.set(10, 10, 10);
-
-// Renderer
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-// Light
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(10, 10, 10);
-scene.add(light);
-
-// Grid (VERY IMPORTANT for floor plans)
-const grid = new THREE.GridHelper(50, 50);
-scene.add(grid);
-
-// Simple cube (test object)
-const geometry = new THREE.BoxGeometry(2, 2, 2);
-const material = new THREE.MeshStandardMaterial({ color: 0x0077ff });
-const cube = new THREE.Mesh(geometry, material);
-scene.add(cube);
-
-// Controls (optional but recommended)
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
-const controls = new OrbitControls(camera, renderer.domElement);
-
-// Animation loop
-function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-}
-
-animate();
-createWall([0,0], [10,0]);
-createWall([10,0], [10,8]);
-createWall([10,8], [0,8]);
-createWall([0,8], [0,0]);
+init();
