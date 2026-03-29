@@ -2,146 +2,529 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>3D Floor Plan - High Quality Render</title>
+    <title>3D Floor Plan · Structural Intelligence</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Segoe UI', sans-serif; }
-        #ui { 
-            position: absolute; top: 20px; left: 20px; 
-            color: white; background: rgba(20, 20, 20, 0.9); 
-            padding: 20px; border-radius: 12px; border: 1px solid #333;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            z-index: 100;
+        :root {
+            --bg:       #07080d;
+            --panel-bg: #0b0d14;
+            --border:   #1a1d2e;
+            --accent:   #e8ff47;
+            --text:     #c8ccd8;
+            --muted:    #4a4f6a;
+            --lb-col:   #ff6b35;
+            --pt-col:   #00d4aa;
+            --sl-col:   #bf5af2;
+            --co-col:   #ffd60a;
+            --sel-col:  #e8ff47;
         }
-        h2 { margin: 0 0 5px 0; font-size: 18px; color: #00aaff; }
-        #status { font-size: 12px; opacity: 0.7; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { overflow: hidden; background: var(--bg); font-family: 'IBM Plex Sans', sans-serif; color: var(--text); }
+
+        #canvas-wrap { position: fixed; inset: 0; }
+
+        /* HUD */
+        #hud { position: fixed; top: 20px; left: 20px; z-index: 20; pointer-events: none; }
+        #hud h1 { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 600; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; }
+        #render-status { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+        /* Legend */
+        #legend { position: fixed; bottom: 20px; left: 20px; z-index: 20; background: rgba(11,13,20,0.85); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; backdrop-filter: blur(6px); }
+        .leg-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 10px; color: var(--muted); }
+        .leg-row:last-child { margin: 0; }
+        .leg-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+        /* Click hint */
+        #click-hint { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 20; font-size: 10px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; background: rgba(11,13,20,0.7); border: 1px solid var(--border); padding: 6px 14px; border-radius: 20px; transition: opacity 1s; }
+
+        /* Overview panel */
+        #overview { position: fixed; top: 0; right: 0; width: 380px; height: 100vh; background: var(--panel-bg); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 20; }
+        #ov-header { padding: 20px 18px 14px; border-bottom: 1px solid var(--border); }
+        #ov-header h2 { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; }
+        #ov-header p { font-size: 10px; color: var(--muted); margin-top: 4px; }
+        #ov-tabs { display: flex; border-bottom: 1px solid var(--border); }
+        .ovtab { flex: 1; padding: 9px 0; font-size: 10px; text-align: center; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; font-family: 'IBM Plex Mono', monospace; transition: all 0.2s; }
+        .ovtab.active { color: var(--accent); border-color: var(--accent); }
+        #ov-body { flex: 1; overflow-y: auto; padding: 14px 18px; }
+        #ov-body::-webkit-scrollbar { width: 3px; }
+        #ov-body::-webkit-scrollbar-thumb { background: #1a1d2e; }
+        #ov-summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+        .stat-card { background: #0f1120; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+        .stat-card .num { font-family: 'IBM Plex Mono', monospace; font-size: 24px; font-weight: 600; color: var(--accent); }
+        .stat-card .lbl { font-size: 9px; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+        #ov-hint { font-size: 10px; color: var(--muted); line-height: 1.7; }
+        #ov-hint strong { color: #8090a0; }
+        .ov-concern { background: rgba(255,100,0,0.06); border: 1px solid rgba(255,100,0,0.2); border-radius: 6px; padding: 9px 12px; margin-bottom: 8px; font-size: 10px; color: #ff9055; line-height: 1.5; }
+        .ov-concern strong { display: block; font-size: 9px; color: #ff6030; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+        .ov-el-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--border); cursor: pointer; border-radius: 4px; transition: background 0.15s; }
+        .ov-el-row:hover { background: rgba(232,255,71,0.04); }
+        .ov-el-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+        .ov-el-name { font-size: 11px; flex: 1; }
+        .ov-el-meta { font-size: 9px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
+        #ov-status { padding: 10px 18px; font-size: 9px; color: var(--muted); border-top: 1px solid var(--border); font-family: 'IBM Plex Mono', monospace; }
+
+        /* Detail panel */
+        #panel { position: fixed; top: 0; right: 0; width: 380px; height: 100vh; background: var(--panel-bg); border-left: 1px solid var(--border); display: flex; flex-direction: column; z-index: 30; transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.16,1,0.3,1); }
+        #panel.open { transform: translateX(0); }
+        #panel-header { padding: 16px 18px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; }
+        #panel-el-id { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent); letter-spacing: 1px; }
+        #panel-el-label { font-size: 13px; font-weight: 600; margin-top: 2px; }
+        #panel-el-meta { font-size: 10px; color: var(--muted); margin-top: 3px; }
+        #panel-close { width: 28px; height: 28px; border-radius: 50%; background: #1a1d2e; border: none; color: var(--muted); cursor: pointer; font-size: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+        #panel-close:hover { background: #2a2d3e; color: #fff; }
+        #panel-tabs { display: flex; border-bottom: 1px solid var(--border); }
+        .ptab { flex: 1; padding: 9px 0; font-size: 10px; font-family: 'IBM Plex Mono', monospace; text-align: center; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; letter-spacing: 0.5px; transition: all 0.2s; }
+        .ptab.active { color: var(--accent); border-color: var(--accent); }
+        #panel-body { flex: 1; overflow-y: auto; }
+        #panel-body::-webkit-scrollbar { width: 3px; }
+        #panel-body::-webkit-scrollbar-thumb { background: #1a1d2e; }
+
+        /* Details */
+        #tab-details { padding: 14px 18px; }
+        .type-badge { display: inline-block; font-size: 9px; font-weight: 600; padding: 3px 9px; border-radius: 12px; letter-spacing: 0.6px; margin-bottom: 12px; text-transform: uppercase; }
+        .badge-lb { background: rgba(255,107,53,0.15); color: var(--lb-col); border: 1px solid rgba(255,107,53,0.3); }
+        .badge-pt { background: rgba(0,212,170,0.12); color: var(--pt-col); border: 1px solid rgba(0,212,170,0.25); }
+        .badge-sl { background: rgba(191,90,242,0.12); color: var(--sl-col); border: 1px solid rgba(191,90,242,0.25); }
+        .badge-co { background: rgba(255,214,10,0.12); color: var(--co-col); border: 1px solid rgba(255,214,10,0.25); }
+        .weights-row { display: flex; gap: 6px; margin-bottom: 14px; }
+        .w-chip { flex: 1; background: #0f1120; border: 1px solid var(--border); border-radius: 6px; padding: 8px 6px; text-align: center; }
+        .w-chip .wval { font-size: 16px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
+        .w-chip .wlbl { font-size: 8px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .w-str .wval { color: var(--lb-col); }
+        .w-dur .wval { color: var(--pt-col); }
+        .w-cst .wval { color: var(--sl-col); }
+        .mat-section-title { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 8px; font-family: 'IBM Plex Mono', monospace; }
+        .mat-card { background: #0f1120; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; position: relative; overflow: hidden; }
+        .mat-card.rank-1 { border-color: rgba(232,255,71,0.3); }
+        .mat-rank-stripe { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+        .stripe-1 { background: var(--accent); }
+        .stripe-2 { background: var(--muted); }
+        .stripe-3 { background: #2a2d3e; }
+        .mat-top { display: flex; align-items: center; gap: 8px; margin-left: 8px; }
+        .mat-name { font-size: 12px; font-weight: 600; flex: 1; }
+        .mat-score { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent); background: rgba(232,255,71,0.08); padding: 2px 7px; border-radius: 4px; }
+        .mat-bar-bg { background: #1a1d2e; height: 3px; border-radius: 2px; margin: 6px 0 6px 8px; }
+        .mat-bar-fill { height: 3px; border-radius: 2px; background: linear-gradient(90deg, #2a5a2a, var(--accent)); }
+        .mat-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-left: 8px; }
+        .mat-tag { font-size: 9px; padding: 1px 6px; border-radius: 3px; background: #1a1d2e; color: #6a7090; }
+        .mat-note { font-size: 9px; color: #454860; margin: 4px 0 0 8px; font-style: italic; }
+        .concern-box { background: rgba(255,100,0,0.07); border: 1px solid rgba(255,100,0,0.25); border-radius: 6px; padding: 10px 12px; margin-top: 12px; font-size: 10px; color: #ff9055; line-height: 1.6; }
+        .concern-box strong { display: block; margin-bottom: 3px; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #ff6030; }
+
+        /* Chat */
+        #tab-chat { display: flex; flex-direction: column; height: 100%; }
+        #chat-messages { flex: 1; overflow-y: auto; padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+        #chat-messages::-webkit-scrollbar { width: 3px; }
+        #chat-messages::-webkit-scrollbar-thumb { background: #1a1d2e; }
+        .msg { max-width: 92%; font-size: 11px; line-height: 1.65; padding: 9px 12px; border-radius: 10px; animation: fadeUp 0.2s ease; white-space: pre-wrap; }
+        .msg-user { background: rgba(232,255,71,0.1); border: 1px solid rgba(232,255,71,0.2); color: #d8e8b0; align-self: flex-end; border-radius: 10px 10px 2px 10px; }
+        .msg-ai { background: #0f1120; border: 1px solid var(--border); color: var(--text); align-self: flex-start; border-radius: 10px 10px 10px 2px; }
+        .msg-ai.thinking { color: var(--muted); font-style: italic; }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+        #chat-input-row { display: flex; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); flex-shrink: 0; }
+        #chat-input { flex: 1; background: #0f1120; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 11px; font-family: 'IBM Plex Sans', sans-serif; outline: none; resize: none; height: 38px; transition: border-color 0.2s; }
+        #chat-input:focus { border-color: rgba(232,255,71,0.4); }
+        #chat-send { background: var(--accent); color: #000; border: none; border-radius: 8px; width: 38px; cursor: pointer; font-size: 16px; font-weight: 700; flex-shrink: 0; transition: opacity 0.2s; }
+        #chat-send:hover { opacity: 0.85; }
+        #chat-send:disabled { opacity: 0.3; cursor: default; }
     </style>
 </head>
 <body>
-    <div id="ui">
-        <h2>Modern Floor Plan</h2>
-        <div id="status">Initializing Environment...</div>
+
+<div id="canvas-wrap"></div>
+
+<div id="hud">
+    <h1>3D Floor Plan</h1>
+    <div id="render-status">Initialising...</div>
+</div>
+
+<div id="legend">
+    <div class="leg-row"><div class="leg-dot" style="background:var(--lb-col)"></div>Load-Bearing Wall</div>
+    <div class="leg-row"><div class="leg-dot" style="background:var(--pt-col)"></div>Partition Wall</div>
+    <div class="leg-row"><div class="leg-dot" style="background:var(--sl-col)"></div>Slab</div>
+    <div class="leg-row"><div class="leg-dot" style="background:var(--co-col)"></div>Column</div>
+</div>
+
+<div id="click-hint">Click any wall to inspect &nbsp;·&nbsp; Scroll to zoom &nbsp;·&nbsp; Drag to orbit</div>
+
+<!-- Overview -->
+<div id="overview">
+    <div id="ov-header">
+        <h2>Structural Intelligence</h2>
+        <p>Material Analysis · Cost–Strength Tradeoff</p>
     </div>
+    <div id="ov-tabs">
+        <div class="ovtab active" onclick="ovSwitch('summary',this)">Summary</div>
+        <div class="ovtab" onclick="ovSwitch('elements',this)">Elements</div>
+        <div class="ovtab" onclick="ovSwitch('concerns',this)">⚠ Issues</div>
+    </div>
+    <div id="ov-body">
+        <div id="ov-tab-summary">
+            <div id="ov-summary-grid">
+                <div class="stat-card"><div class="num" id="s-total">—</div><div class="lbl">Total Elements</div></div>
+                <div class="stat-card"><div class="num" id="s-lb">—</div><div class="lbl">Load-Bearing</div></div>
+                <div class="stat-card"><div class="num" id="s-pt">—</div><div class="lbl">Partition Walls</div></div>
+                <div class="stat-card"><div class="num" id="s-col">—</div><div class="lbl">Cols + Slabs</div></div>
+            </div>
+            <p id="ov-hint">Click any <strong>wall in the 3D view</strong> to open its material analysis and ask questions about it.</p>
+        </div>
+        <div id="ov-tab-elements" style="display:none"></div>
+        <div id="ov-tab-concerns" style="display:none"></div>
+    </div>
+    <div id="ov-status">Loading...</div>
+</div>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
+<!-- Detail panel -->
+<div id="panel">
+    <div id="panel-header">
+        <div>
+            <div id="panel-el-id">—</div>
+            <div id="panel-el-label">—</div>
+            <div id="panel-el-meta">—</div>
+        </div>
+        <button id="panel-close" onclick="closePanel()">✕</button>
+    </div>
+    <div id="panel-tabs">
+        <div class="ptab active" onclick="pSwitch('details',this)">Details</div>
+        <div class="ptab" onclick="pSwitch('chat',this)">Ask AI</div>
+    </div>
+    <div id="panel-body">
+        <div id="tab-details"></div>
+        <div id="tab-chat" style="display:none">
+            <div id="chat-messages"></div>
+            <div id="chat-input-row">
+                <textarea id="chat-input" placeholder="Ask about this element…"
+                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+                <button id="chat-send" onclick="sendChat()">↑</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const SCALE = 0.2, WALL_HEIGHT = 12, WALL_THICKNESS = 1.2;
+
+const TYPE_COLORS = {
+    load_bearing_wall: 0xff6b35,
+    partition_wall:    0x00d4aa,
+    slab:              0xbf5af2,
+    column:            0xffd60a,
+};
+const SEL_COLOR    = 0xe8ff47;
+const SEL_EMISSIVE = 0x3a4000;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x07080d, 0.0018);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.getElementById('canvas-wrap').appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
+camera.position.set(150, 150, 150);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x222233, 1.2));
+const sun = new THREE.DirectionalLight(0xfff5e0, 2.5);
+sun.position.set(100, 200, 80);
+sun.castShadow = true;
+sun.shadow.camera.left = sun.shadow.camera.bottom = -250;
+sun.shadow.camera.right = sun.shadow.camera.top = 250;
+sun.shadow.mapSize.set(2048, 2048);
+scene.add(sun);
+
+const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(2000, 2000),
+    new THREE.MeshStandardMaterial({ color: 0x0d0e16, roughness: 0.9 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const wallMeshes = [];
+let selectedMesh = null;
+let analysisData  = null;
+
+// ── Raycasting — only fire on clicks, not drags ──
+const raycaster  = new THREE.Raycaster();
+const pointer    = new THREE.Vector2();
+let pointerDown  = { x: 0, y: 0 };
+
+renderer.domElement.addEventListener('mousedown', e => { pointerDown = { x: e.clientX, y: e.clientY }; });
+renderer.domElement.addEventListener('mouseup', e => {
+    if (Math.abs(e.clientX - pointerDown.x) > 5 || Math.abs(e.clientY - pointerDown.y) > 5) return;
+    pointer.x =  (e.clientX / window.innerWidth)  * 2 - 1;
+    pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(wallMeshes.map(w => w.mesh));
+    if (hits.length) {
+        const hit = wallMeshes.find(w => w.mesh === hits[0].object);
+        if (hit) selectWall(hit);
+    }
+});
+
+function createWall(wall, elData) {
+    const x1 = wall.start.x * SCALE, z1 = wall.start.y * SCALE;
+    const x2 = wall.end.x   * SCALE, z2 = wall.end.y   * SCALE;
+    const dx = x2 - x1, dz = z2 - z1;
+    const len = Math.sqrt(dx*dx + dz*dz);
+    if (len < 0.1) return;
+    const mat  = new THREE.MeshStandardMaterial({ color: TYPE_COLORS[wall.element_type] ?? 0xffffff, roughness: 0.35, metalness: 0.05 });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(len, WALL_HEIGHT, WALL_THICKNESS), mat);
+    mesh.position.set(x1 + dx/2, WALL_HEIGHT/2, z1 + dz/2);
+    mesh.rotation.y = -Math.atan2(dz, dx);
+    mesh.castShadow = mesh.receiveShadow = true;
+    scene.add(mesh);
+    wallMeshes.push({ mesh, wall, elData });
+}
+
+function selectWall(hit) {
+    if (selectedMesh) {
+        const prev = wallMeshes.find(w => w.mesh === selectedMesh);
+        if (prev) {
+            prev.mesh.material.color.setHex(TYPE_COLORS[prev.wall.element_type] ?? 0xffffff);
+            prev.mesh.material.emissive.setHex(0x000000);
         }
-    </script>
+    }
+    selectedMesh = hit.mesh;
+    hit.mesh.material.color.setHex(SEL_COLOR);
+    hit.mesh.material.emissive.setHex(SEL_EMISSIVE);
+    if (hit.elData) window.openPanel(hit.elData);
+}
 
-    <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+// expose for overview list clicks
+window._selectByElId = (id) => {
+    const hit = wallMeshes.find(w => w.elData && w.elData.element_id === id);
+    if (hit) selectWall(hit);
+    else if (analysisData) {
+        const el = analysisData.find(e => e.element_id === id);
+        if (el) window.openPanel(el);
+    }
+};
 
-        // Settings
-        const SCALE = 0.2;
-        const WALL_HEIGHT = 12;
-        const WALL_THICKNESS = 1.2;
-
-        // --- 1. SCENE & RENDERER SETUP ---
-        const scene = new THREE.Scene();
-        // Soft blue-ish fog to create depth in the distance
-        scene.fog = new THREE.FogExp2(0x111111, 0.002);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        // Enable Shadows & Tone Mapping
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        document.body.appendChild(renderer.domElement);
-
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 2000);
-        camera.position.set(150, 150, 150);
-
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-
-        // --- 2. ENVIRONMENT & LIGHTING ---
-        
-        // Hemisphere Light: Simulates sky color (top) and ground color (bottom)
-        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
-        scene.add(hemiLight);
-
-        // Directional Light: Acts as the "Sun" for shadows
-        const sunLight = new THREE.DirectionalLight(0xffffff, 2);
-        sunLight.position.set(100, 200, 100);
-        sunLight.castShadow = true;
-        // Optimize shadow area
-        sunLight.shadow.camera.left = -200;
-        sunLight.shadow.camera.right = 200;
-        sunLight.shadow.camera.top = 200;
-        sunLight.shadow.camera.bottom = -200;
-        sunLight.shadow.mapSize.width = 2048;
-        sunLight.shadow.mapSize.height = 2048;
-        scene.add(sunLight);
-
-        // Ground Plane (To catch shadows)
-        const groundGeo = new THREE.PlaneGeometry(1000, 1000);
-        const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.8 });
-        const ground = new THREE.Mesh(groundGeo, groundMat);
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        scene.add(ground);
-
-        // --- 3. WALL BUILDER ---
-        const createWall = (start, end) => {
-            const x1 = start.x * SCALE, z1 = start.y * SCALE;
-            const x2 = end.x * SCALE, z2 = end.y * SCALE;
-
-            const dx = x2 - x1;
-            const dz = z2 - z1;
-            const length = Math.sqrt(dx * dx + dz * dz);
-            if (length < 0.1) return;
-
-            const geo = new THREE.BoxGeometry(length, WALL_HEIGHT, WALL_THICKNESS);
-            // Using MeshStandardMaterial for better lighting reaction
-            const mat = new THREE.MeshStandardMaterial({ 
-                color: 0xffffff, 
-                roughness: 0.4, 
-                metalness: 0.1 
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-
-            mesh.position.set(x1 + dx / 2, WALL_HEIGHT / 2, z1 + dz / 2);
-            mesh.rotation.y = -Math.atan2(dz, dx);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            scene.add(mesh);
-        };
-
-        // --- 4. API FETCH ---
-        async function loadWalls() {
-            const statusEl = document.getElementById('status');
-            try {
-                const response = await fetch('http://127.0.0.1:5000/api/data');
-                const result = await response.json();
-                if (result.status === "success") {
-                    result.data.forEach(w => createWall(w.start, w.end));
-                    statusEl.innerHTML = `Environment Loaded. ${result.data.length} segments detected.`;
-                }
-            } catch (err) {
-                statusEl.innerHTML = `<span style="color:red">Connection Failed</span>`;
-            }
+async function loadScene() {
+    const statusEl = document.getElementById('render-status');
+    try {
+        const res    = await fetch('http://127.0.0.1:5000/api/material-analysis');
+        const result = await res.json();
+        if (result.status === 'success') {
+            analysisData = result.analysis;
+            const elMap  = {};
+            result.analysis.forEach(el => { elMap[el.element_id] = el; });
+            result.walls.forEach(w => createWall(w, elMap[w.element_id]));
+            statusEl.textContent = `${result.walls.length} segments · click a wall to inspect`;
+            window.renderOverview(result);
         }
+    } catch(e) {
+        statusEl.innerHTML = '<span style="color:#ff4444">Backend failed — is Flask running?</span>';
+        document.getElementById('ov-status').textContent = 'Cannot reach http://127.0.0.1:5000';
+    }
+}
 
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
-        }
+function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+loadScene();
+animate();
 
-        loadWalls();
-        animate();
+window.onresize = () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+};
+</script>
 
-        window.onresize = () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        };
-    </script>
+<script>
+// ── All panel logic in plain JS (accessible from HTML onclick) ──
+
+const DOT_COLORS = {
+    load_bearing_wall: 'var(--lb-col)',
+    partition_wall:    'var(--pt-col)',
+    slab:              'var(--sl-col)',
+    column:            'var(--co-col)',
+};
+const BADGE_CLASS = {
+    load_bearing_wall: 'badge-lb',
+    partition_wall:    'badge-pt',
+    slab:              'badge-sl',
+    column:            'badge-co',
+};
+
+window.openPanel = function(el) {
+    window._currentEl = el;
+
+    document.getElementById('panel-el-id').textContent    = el.element_id;
+    document.getElementById('panel-el-label').textContent = el.room_label || el.element_type.replace(/_/g,' ');
+    document.getElementById('panel-el-meta').textContent  =
+        `Span: ${el.span_m} m  ·  Area: ${el.area_m2} m²  ·  ${el.is_outer ? 'Outer Wall' : 'Interior'}`;
+
+    renderDetails(el);
+
+    // Reset chat with greeting
+    document.getElementById('chat-messages').innerHTML = '';
+    appendMsg('ai', `Hi! I'm looking at ${el.element_id} (${el.element_type.replace(/_/g,' ')}). The top recommendation is ${(el.recommendations||[])[0]?.material || '—'} with a score of ${(el.recommendations||[])[0]?.score?.toFixed(3) || '—'}. Ask me anything about materials, structural role, or cost tradeoffs.`);
+
+    // Switch to details tab
+    pSwitch('details', document.querySelector('.ptab'));
+
+    document.getElementById('panel').classList.add('open');
+    document.getElementById('overview').style.display = 'none';
+};
+
+window.closePanel = function() {
+    document.getElementById('panel').classList.remove('open');
+    document.getElementById('overview').style.display = 'flex';
+    // deselect handled by Three.js side via selectWall reset — not needed here
+};
+
+function renderDetails(el) {
+    const wp = el.weight_profile || {};
+    const typeLabel = el.element_type.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+    const badgeClass = BADGE_CLASS[el.element_type] || 'badge-pt';
+
+    const recs = (el.recommendations || []).slice(0,3).map((r,i) => `
+        <div class="mat-card rank-${i+1}">
+            <div class="mat-rank-stripe stripe-${i+1}"></div>
+            <div class="mat-top">
+                <span class="mat-name">${r.material}</span>
+                <span class="mat-score">${r.score.toFixed(3)}</span>
+            </div>
+            <div class="mat-bar-bg"><div class="mat-bar-fill" style="width:${(r.score*100).toFixed(1)}%"></div></div>
+            <div class="mat-tags">
+                <span class="mat-tag">Cost: ${r.cost_label}</span>
+                <span class="mat-tag">Str: ${r.strength_label}</span>
+                <span class="mat-tag">Dur: ${r.durability_label}</span>
+                <span class="mat-tag">₹${r.unit_cost_inr.toLocaleString()}/m³</span>
+            </div>
+            <div class="mat-note">${r.notes}</div>
+        </div>
+    `).join('');
+
+    const concerns = (el.concerns || []).map(c =>
+        `<div class="concern-box"><strong>⚠ Structural Concern</strong>${c}</div>`
+    ).join('');
+
+    document.getElementById('tab-details').innerHTML = `
+        <span class="type-badge ${badgeClass}">${typeLabel}</span>
+        <div class="mat-section-title" style="margin-bottom:6px">Scoring Weights</div>
+        <div class="weights-row">
+            <div class="w-chip w-str"><div class="wval">${wp.strength ?? '?'}</div><div class="wlbl">Strength</div></div>
+            <div class="w-chip w-dur"><div class="wval">${wp.durability ?? '?'}</div><div class="wlbl">Durability</div></div>
+            <div class="w-chip w-cst"><div class="wval">${wp.cost ?? '?'}</div><div class="wlbl">Cost</div></div>
+        </div>
+        <div class="mat-section-title">Top Material Recommendations</div>
+        ${recs}
+        ${concerns}
+    `;
+}
+
+// ── Chat ──
+function appendMsg(role, text) {
+    const div = document.createElement('div');
+    div.className = `msg msg-${role}`;
+    div.textContent = text;
+    document.getElementById('chat-messages').appendChild(div);
+    div.scrollIntoView({ behavior: 'smooth' });
+    return div;
+}
+
+window.sendChat = async function() {
+    const input = document.getElementById('chat-input');
+    const q = input.value.trim();
+    if (!q || !window._currentEl) return;
+
+    input.value = '';
+    document.getElementById('chat-send').disabled = true;
+    appendMsg('user', q);
+
+    const thinking = appendMsg('ai', 'Thinking…');
+    thinking.classList.add('thinking');
+
+    try {
+        const res = await fetch('http://127.0.0.1:5000/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: q, element: window._currentEl })
+        });
+        const data = await res.json();
+        thinking.remove();
+        appendMsg('ai', data.answer || 'No response.');
+    } catch(e) {
+        thinking.remove();
+        appendMsg('ai', 'Could not reach Flask backend.');
+    }
+
+    document.getElementById('chat-send').disabled = false;
+    input.focus();
+};
+
+// ── Overview ──
+window.renderOverview = function(result) {
+    const { summary, analysis } = result;
+    document.getElementById('s-total').textContent = summary.total_elements;
+    document.getElementById('s-lb').textContent    = summary.load_bearing_walls;
+    document.getElementById('s-pt').textContent    = summary.partition_walls;
+    document.getElementById('s-col').textContent   = summary.slabs + summary.columns;
+
+    document.getElementById('ov-tab-elements').innerHTML = analysis.map(el => `
+        <div class="ov-el-row" onclick="window._selectByElId('${el.element_id}')">
+            <div class="ov-el-dot" style="background:${DOT_COLORS[el.element_type] || '#fff'}"></div>
+            <div class="ov-el-name">${el.element_id} — ${el.room_label || el.element_type.replace(/_/g,' ')}</div>
+            <div class="ov-el-meta">${el.span_m}m</div>
+        </div>
+    `).join('');
+
+    const concerns = analysis.flatMap(el =>
+        (el.concerns || []).map(c => ({ id: el.element_id, label: el.room_label, concern: c }))
+    );
+    document.getElementById('ov-tab-concerns').innerHTML = concerns.length === 0
+        ? '<p style="font-size:10px;color:var(--muted);margin-top:12px">No structural concerns detected.</p>'
+        : concerns.map(c => `
+            <div class="ov-concern">
+                <strong>${c.id} — ${c.label}</strong>${c.concern}
+            </div>
+        `).join('');
+
+    document.getElementById('ov-status').textContent =
+        `Ready · ${analysis.length} elements · ${concerns.length} concern(s)`;
+
+    setTimeout(() => { document.getElementById('click-hint').style.opacity = '0'; }, 6000);
+};
+
+// ── Tab switchers ──
+function pSwitch(name, el) {
+    document.querySelectorAll('.ptab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.ptab:nth-child(${name === 'details' ? 1 : 2})`).classList.add('active');
+    document.getElementById('tab-details').style.display = name === 'details' ? '' : 'none';
+    document.getElementById('tab-chat').style.display    = name === 'chat'    ? 'flex' : 'none';
+    if (name === 'chat') {
+        setTimeout(() => document.getElementById('chat-messages').lastElementChild?.scrollIntoView(), 50);
+        document.getElementById('chat-input').focus();
+    }
+}
+
+function ovSwitch(name, el) {
+    document.querySelectorAll('.ovtab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('ov-tab-summary').style.display  = name === 'summary'  ? '' : 'none';
+    document.getElementById('ov-tab-elements').style.display = name === 'elements' ? '' : 'none';
+    document.getElementById('ov-tab-concerns').style.display = name === 'concerns' ? '' : 'none';
+}
+</script>
+
 </body>
 </html>
