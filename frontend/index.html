@@ -4,18 +4,137 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>3D Floor Plan Generator</title>
-    <meta name="description" content="Interactive 3D floor plan generator with walls, windows and animated doors powered by Three.js" />
+    <meta name="description" content="Interactive 3D floor plan generator — upload any floor plan PNG and get a real-time 3D model powered by OpenCV + Three.js" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/src/styles/main.css" />
+    <style>
+      /* ── Loading Overlay ── */
+      #loading-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(10, 10, 20, 0.82);
+        backdrop-filter: blur(6px);
+        gap: 20px;
+      }
+
+      .loader-ring {
+        width: 56px;
+        height: 56px;
+        border: 4px solid rgba(255,255,255,0.12);
+        border-top-color: #6ee7ff;
+        border-radius: 50%;
+        animation: spin 0.85s linear infinite;
+      }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      #loading-text {
+        color: #c8e6ff;
+        font-family: 'Inter', sans-serif;
+        font-size: 0.95rem;
+        letter-spacing: 0.02em;
+        opacity: 0.9;
+      }
+
+      /* ── Image Picker Bar ── */
+      .image-picker {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 8px;
+        margin-bottom: 12px;
+      }
+
+      .image-picker label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--text-muted, #aaa);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+        margin: 0;
+      }
+
+      .image-picker select {
+        flex: 1;
+        min-width: 0;
+        padding: 5px 8px;
+        font-size: 0.82rem;
+        background: rgba(0,0,0,0.35);
+        color: #e8f4ff;
+        border: 1px solid rgba(110,231,255,0.3);
+        border-radius: 5px;
+        cursor: pointer;
+      }
+
+      .image-picker select:focus { outline: none; border-color: #6ee7ff; }
+
+      .btn-load {
+        padding: 5px 14px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        background: linear-gradient(135deg, #1a78c2, #0ea5e9);
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: opacity 0.15s, transform 0.12s;
+      }
+      .btn-load:hover  { opacity: 0.88; transform: translateY(-1px); }
+      .btn-load:active { transform: translateY(0); }
+
+      /* ── Backend status badge ── */
+      .backend-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        padding: 2px 8px;
+        border-radius: 20px;
+        background: rgba(34,197,94,0.18);
+        color: #4ade80;
+        border: 1px solid rgba(34,197,94,0.3);
+        margin-left: auto;
+      }
+      .backend-badge::before {
+        content: '';
+        width: 6px; height: 6px;
+        background: #4ade80;
+        border-radius: 50%;
+        animation: pulse-dot 1.6s ease infinite;
+      }
+      @keyframes pulse-dot {
+        0%, 100% { opacity:1; transform: scale(1); }
+        50%       { opacity:0.4; transform: scale(0.7); }
+      }
+    </style>
   </head>
   <body>
+
+    <!-- ── Loading Overlay ── -->
+    <div id="loading-overlay">
+      <div class="loader-ring"></div>
+      <div id="loading-text">Analysing floor plan…</div>
+    </div>
 
     <!-- ── Header ── -->
     <header>
       <span class="logo">🏗️</span>
       <h1>3D Floor Plan Generator</h1>
-      <span class="tag">Three.js · Modular · Interactive</span>
+      <span class="tag">OpenCV · Three.js · Real-time</span>
     </header>
 
     <div class="workspace">
@@ -25,6 +144,21 @@
 
       <!-- ────────── Sidebar ────────── -->
       <aside id="sidebar">
+
+        <!-- Floor Plan Loader -->
+        <div>
+          <div class="sec-title" style="display:flex;align-items:center;gap:6px;">
+            📐 Floor Plan
+            <span class="backend-badge">Backend Live</span>
+          </div>
+          <div class="image-picker">
+            <label>Image</label>
+            <select id="image-select"></select>
+            <button class="btn-load" id="load-plan-btn">⟳ Load</button>
+          </div>
+        </div>
+
+        <hr style="border-color:var(--border)" />
 
         <!-- Wall Segments -->
         <div>

@@ -49,17 +49,17 @@ const handleMat = new THREE.MeshStandardMaterial({
  */
 export function createDoor(scene, wallSeg, opts = {}) {
   const {
-    posT       = 0.5,
-    doorWidth  = 6,
+    posT = 0.5,
+    doorWidth = 6,
     doorHeight = 9,
-    label      = 'Door',
+    label = 'Door',
   } = opts;
 
   // ── Wall geometry in world space ──
   const x1 = wallSeg.x1 * SCALE, z1 = wallSeg.y1 * SCALE;
   const x2 = wallSeg.x2 * SCALE, z2 = wallSeg.y2 * SCALE;
   const dx = x2 - x1, dz = z2 - z1;
-  const L  = Math.sqrt(dx * dx + dz * dz);
+  const L = Math.sqrt(dx * dx + dz * dz);
   const wallAngle = Math.atan2(dz, dx); // wall runs in this direction
 
   // ── Hinge world position (left/start edge of door opening) ──
@@ -77,24 +77,24 @@ export function createDoor(scene, wallSeg, opts = {}) {
   frameGroup.position.set(frameCx, 0, frameCz);
   frameGroup.rotation.y = -wallAngle;
 
-  const fw    = 0.55;              // frame bar width
+  const fw = 0.55;              // frame bar width
   // Depth is LARGER than WALL_THICKNESS so the frame protrudes through
   // both wall faces, physically removing any coplanar overlap.
-  const fd    = WALL_THICKNESS + 0.2;
+  const fd = WALL_THICKNESS + 0.2;
   const halfW = doorWidth / 2;
 
   // [ barWidth, barHeight, offsetX, offsetY ]
   const frameBars = [
-    [doorWidth + fw * 2, fw, fd, 0,               doorHeight + fw / 2], // top
-    [fw, doorHeight + fw,  fd, -(halfW + fw / 2), doorHeight / 2],       // left upright
-    [fw, doorHeight + fw,  fd,  (halfW + fw / 2), doorHeight / 2],       // right upright
+    [doorWidth + fw * 2, fw, fd, 0, doorHeight + fw / 2], // top
+    [fw, doorHeight + fw, fd, -(halfW + fw / 2), doorHeight / 2],       // left upright
+    [fw, doorHeight + fw, fd, (halfW + fw / 2), doorHeight / 2],       // right upright
   ];
 
   frameBars.forEach(([w, h, d, ox, oy]) => {
-    const geo  = new THREE.BoxGeometry(w, h, d);
+    const geo = new THREE.BoxGeometry(w, h, d);
     const mesh = new THREE.Mesh(geo, frameMat);
     mesh.position.set(ox, oy, 0);
-    mesh.castShadow    = true;
+    mesh.castShadow = true;
     mesh.receiveShadow = true;
     frameGroup.add(mesh);
   });
@@ -110,13 +110,13 @@ export function createDoor(scene, wallSeg, opts = {}) {
   doorRoot.add(swingPivot);
 
   // ── Panel body ──
-  const panelW    = doorWidth  - fw * 0.6;
-  const panelH    = doorHeight - fw * 0.4;
-  const panelThk  = WALL_THICKNESS * 0.55;
-  const panelGeo  = new THREE.BoxGeometry(panelW, panelH, panelThk);
-  const panel     = new THREE.Mesh(panelGeo, panelMat);
+  const panelW = doorWidth - fw * 0.6;
+  const panelH = doorHeight - fw * 0.4;
+  const panelThk = WALL_THICKNESS * 0.55;
+  const panelGeo = new THREE.BoxGeometry(panelW, panelH, panelThk);
+  const panel = new THREE.Mesh(panelGeo, panelMat);
   panel.position.set(panelW / 2, panelH / 2, 0);
-  panel.castShadow    = true;
+  panel.castShadow = true;
   panel.receiveShadow = true;
   swingPivot.add(panel);
 
@@ -127,7 +127,7 @@ export function createDoor(scene, wallSeg, opts = {}) {
     { w: insetW, h: panelH * 0.45, cy: panelH * 0.68 },
   ];
   insets.forEach(ins => {
-    const geo  = new THREE.BoxGeometry(ins.w, ins.h, panelThk * 0.4);
+    const geo = new THREE.BoxGeometry(ins.w, ins.h, panelThk * 0.4);
     const mesh = new THREE.Mesh(geo, insetMat);
     mesh.position.set(panelW / 2, ins.cy, panelThk * 0.3);
     swingPivot.add(mesh);
@@ -154,7 +154,7 @@ export function createDoor(scene, wallSeg, opts = {}) {
   scene.add(doorRoot);
 
   // ── Animation state ──────────────────────────────────────────────
-  let isOpen     = false;
+  let isOpen = false;
   let openAmount = 0;       // lerped 0..1
   const OPEN_ANGLE = (Math.PI / 2) * 0.9; // 81° swing
 

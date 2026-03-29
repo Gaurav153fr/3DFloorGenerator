@@ -1,38 +1,41 @@
 // src/main.js  —  Application entry point
-// Walls · Windows (with openings) · Animated Doors
+// Walls · Windows (with openings) · Animated Doors · Real Backend Integration
 
 import * as THREE from 'three';
-import { createScene }             from './scene/SceneManager.js';
-import { createRenderer }          from './scene/RendererManager.js';
-import { createCamera }            from './scene/CameraManager.js';
-import { setupLighting }           from './scene/LightingManager.js';
-import { createGround }            from './scene/Ground.js';
-import { setupResizeHandler }      from './core/ResizeHandler.js';
+import { createScene } from './scene/SceneManager.js';
+import { createRenderer } from './scene/RendererManager.js';
+import { createCamera } from './scene/CameraManager.js';
+import { setupLighting } from './scene/LightingManager.js';
+import { createGround } from './scene/Ground.js';
+import { setupResizeHandler } from './core/ResizeHandler.js';
 import { rebuildWallWithOpenings } from './builders/WallBuilder.js';
-import { createWindowOnWall }      from './builders/WindowBuilder.js';
-import { createDoor }              from './builders/DoorBuilder.js';
-import { fetchWallData, fetchWindowData, fetchDoorData } from './services/floorPlanApi.js';
-import { setStatus, setError }     from './ui/StatusUI.js';
+import { createWindowOnWall } from './builders/WindowBuilder.js';
+import { createDoor } from './builders/DoorBuilder.js';
+import {
+  fetchWallData, fetchWindowData, fetchDoorData,
+  fetchImageList, setCurrentImage, clearCache,
+} from './services/floorPlanApi.js';
+import { setStatus, setError } from './ui/StatusUI.js';
 
 // ═══════════════════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════════════════
 
-let walls   = [];  // { id, x1, y1, x2, y2, meshes: THREE.Mesh[] }
+let walls = [];  // { id, x1, y1, x2, y2, meshes: THREE.Mesh[] }
 let windows = [];  // { id, wallId, posT, winWidth, winHeight, sillHeight, group }
-let doors   = [];  // { id, wallId, posT, doorWidth, doorHeight, door }
+let doors = [];  // { id, wallId, posT, doorWidth, doorHeight, door }
 let wallIdCounter = 0;
-let winIdCounter  = 0;
+let winIdCounter = 0;
 let doorIdCounter = 0;
-let selectedWin   = null;
+let selectedWin = null;
 
 // ═══════════════════════════════════════════════════════════════════
 //  SCENE BOOTSTRAP
 // ═══════════════════════════════════════════════════════════════════
 
-const { scene }            = createScene();
-const container            = document.getElementById('canvas-container');
-const { renderer }         = createRenderer(container);
+const { scene } = createScene();
+const container = document.getElementById('canvas-container');
+const { renderer } = createRenderer(container);
 const { camera, controls } = createCamera(renderer);
 
 setupLighting(scene);
@@ -51,12 +54,12 @@ renderer.setAnimationLoop(() => {
 // ═══════════════════════════════════════════════════════════════════
 
 const raycaster = new THREE.Raycaster();
-const mouse     = new THREE.Vector2();
+const mouse = new THREE.Vector2();
 
 renderer.domElement.addEventListener('click', (e) => {
   const rect = renderer.domElement.getBoundingClientRect();
-  mouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
-  mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
   const panelMeshes = doors.map(d => d.door.panelMesh);
@@ -110,7 +113,7 @@ function refreshWallGeometry(wallId) {
 
 function addWall(x1, y1, x2, y2) {
   if ([x1, y1, x2, y2].some(isNaN)) return null;
-  const id   = ++wallIdCounter;
+  const id = ++wallIdCounter;
   const wall = { id, x1, y1, x2, y2, meshes: [] };
   walls.push(wall);
   wall.meshes = rebuildWallWithOpenings(scene, wall, [], []);
@@ -180,7 +183,7 @@ function refreshAllSelects() {
 function addWindow(wallId, posT, winWidth, winHeight, sillHeight) {
   const wall = walls.find(w => w.id === wallId);
   if (!wall) return;
-  const id    = ++winIdCounter;
+  const id = ++winIdCounter;
   const group = createWindowOnWall(scene, wall, { posT, winWidth, winHeight, sillHeight });
   windows.push({ id, wallId, posT, winWidth, winHeight, sillHeight, group });
   refreshWallGeometry(wallId);
@@ -190,10 +193,10 @@ function addWindow(wallId, posT, winWidth, winHeight, sillHeight) {
 }
 
 function addWindowFromInputs() {
-  const wallId     = parseInt(document.getElementById('win-wall-select').value);
-  const posT       = parseFloat(document.getElementById('win-pos').value);
-  const winWidth   = parseFloat(document.getElementById('win-width').value);
-  const winHeight  = parseFloat(document.getElementById('win-height').value);
+  const wallId = parseInt(document.getElementById('win-wall-select').value);
+  const posT = parseFloat(document.getElementById('win-pos').value);
+  const winWidth = parseFloat(document.getElementById('win-width').value);
+  const winHeight = parseFloat(document.getElementById('win-height').value);
   const sillHeight = parseFloat(document.getElementById('win-sill').value);
   addWindow(wallId, posT, winWidth, winHeight, sillHeight);
 }
@@ -230,10 +233,10 @@ function selectWindow(id) {
   const sec = document.getElementById('sel-section');
   if (!selectedWin) { sec.style.display = 'none'; refreshWindowList(); return; }
   sec.style.display = '';
-  document.getElementById('sel-pos').value    = selectedWin.posT;
-  document.getElementById('sel-width').value  = selectedWin.winWidth;
+  document.getElementById('sel-pos').value = selectedWin.posT;
+  document.getElementById('sel-width').value = selectedWin.winWidth;
   document.getElementById('sel-height').value = selectedWin.winHeight;
-  document.getElementById('sel-sill').value   = selectedWin.sillHeight;
+  document.getElementById('sel-sill').value = selectedWin.sillHeight;
   refreshWindowList();
 }
 
@@ -241,9 +244,9 @@ function applyWindowChanges() {
   if (!selectedWin) return;
   const wd = selectedWin;
   scene.remove(wd.group);
-  wd.posT       = parseFloat(document.getElementById('sel-pos').value);
-  wd.winWidth   = parseFloat(document.getElementById('sel-width').value);
-  wd.winHeight  = parseFloat(document.getElementById('sel-height').value);
+  wd.posT = parseFloat(document.getElementById('sel-pos').value);
+  wd.winWidth = parseFloat(document.getElementById('sel-width').value);
+  wd.winHeight = parseFloat(document.getElementById('sel-height').value);
   wd.sillHeight = parseFloat(document.getElementById('sel-sill').value);
   const wall = walls.find(w => w.id === wd.wallId);
   wd.group = createWindowOnWall(scene, wall, {
@@ -261,9 +264,9 @@ function applyWindowChanges() {
 function addDoor(wallId, posT, doorWidth, doorHeight) {
   const wall = walls.find(w => w.id === wallId);
   if (!wall) return;
-  const id    = ++doorIdCounter;
+  const id = ++doorIdCounter;
   const label = `Door ${id} (W${wallId})`;
-  const door  = createDoor(scene, wall, { posT, doorWidth, doorHeight, label });
+  const door = createDoor(scene, wall, { posT, doorWidth, doorHeight, label });
   doors.push({ id, wallId, posT, doorWidth, doorHeight, door });
   refreshWallGeometry(wallId);
   refreshDoorList();
@@ -272,9 +275,9 @@ function addDoor(wallId, posT, doorWidth, doorHeight) {
 }
 
 function addDoorFromInputs() {
-  const wallId     = parseInt(document.getElementById('door-wall-select').value);
-  const posT       = parseFloat(document.getElementById('door-pos').value);
-  const doorWidth  = parseFloat(document.getElementById('door-width').value);
+  const wallId = parseInt(document.getElementById('door-wall-select').value);
+  const posT = parseFloat(document.getElementById('door-pos').value);
+  const doorWidth = parseFloat(document.getElementById('door-width').value);
   const doorHeight = parseFloat(document.getElementById('door-height').value);
   addDoor(wallId, posT, doorWidth, doorHeight);
 }
@@ -296,7 +299,7 @@ function refreshDoorList() {
     const item = document.createElement('div');
     item.className = 'list-item';
     const icon = entry.door.isOpen ? '🔓' : '🔒';
-    item.innerHTML = `<span>${icon} ${entry.door.label} · t=${entry.posT}</span>`;
+    item.innerHTML = `<span>${icon} ${entry.door.label} · t=${entry.posT.toFixed(2)}</span>`;
     const del = document.createElement('button');
     del.className = 'del-btn'; del.textContent = '✕';
     del.onclick = (e) => { e.stopPropagation(); removeDoor(entry.id); };
@@ -316,36 +319,76 @@ function updateStats() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+//  CLEAR SCENE
+// ═══════════════════════════════════════════════════════════════════
+
+function clearScene() {
+  walls.forEach(w => w.meshes.forEach(m => scene.remove(m)));
+  windows.forEach(wi => scene.remove(wi.group));
+  doors.forEach(d => d.door.dispose());
+  walls = []; windows = []; doors = [];
+  wallIdCounter = 0; winIdCounter = 0; doorIdCounter = 0;
+  selectedWin = null;
+  refreshWallList(); refreshWindowList(); refreshDoorList(); refreshAllSelects();
+  updateStats();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  LOADING OVERLAY
+// ═══════════════════════════════════════════════════════════════════
+
+function showLoading(msg = 'Analysing floor plan…') {
+  const overlay = document.getElementById('loading-overlay');
+  const text = document.getElementById('loading-text');
+  if (overlay) overlay.style.display = 'flex';
+  if (text) text.textContent = msg;
+}
+
+function hideLoading() {
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════
 //  WIRE UI BUTTONS
 // ═══════════════════════════════════════════════════════════════════
 
 function wireButtons() {
-  document.getElementById('add-wall-btn')  ?.addEventListener('click', addWallFromInputs);
-  document.getElementById('add-win-btn')   ?.addEventListener('click', addWindowFromInputs);
+  document.getElementById('add-wall-btn')?.addEventListener('click', addWallFromInputs);
+  document.getElementById('add-win-btn')?.addEventListener('click', addWindowFromInputs);
   document.getElementById('apply-size-btn')?.addEventListener('click', applyWindowChanges);
   document.getElementById('delete-win-btn')?.addEventListener('click', () => { if (selectedWin) removeWindow(selectedWin.id); });
-  document.getElementById('add-door-btn')  ?.addEventListener('click', addDoorFromInputs);
+  document.getElementById('add-door-btn')?.addEventListener('click', addDoorFromInputs);
 
   // Sidebar toggle
   document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
     document.getElementById('sidebar').classList.toggle('collapsed');
   });
+
+  // Image picker — load selected floor plan
+  document.getElementById('load-plan-btn')?.addEventListener('click', async () => {
+    const sel = document.getElementById('image-select');
+    const imageName = sel ? sel.value : '';
+    if (!imageName) return;
+    await loadFloorPlan(imageName);
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  INIT — fetch data and seed scene
+//  LOAD FLOOR PLAN  (fetch + build scene)
 // ═══════════════════════════════════════════════════════════════════
 
-async function init() {
-  setStatus('Fetching floor plan…');
-  wireButtons();
+async function loadFloorPlan(imageName) {
+  showLoading(`Analysing ${imageName}…`);
+  clearScene();
+  clearCache();
+  setCurrentImage(imageName);
 
   try {
-    // ── Fetch all data ──
     const [wallData, windowData, doorData] = await Promise.all([
-      fetchWallData(),
-      fetchWindowData(),
-      fetchDoorData(),
+      fetchWallData(imageName),
+      fetchWindowData(imageName),
+      fetchDoorData(imageName),
     ]);
 
     // ── Build walls ──
@@ -355,7 +398,7 @@ async function init() {
 
     // ── Build windows (wallIndex is 1-based → map to wall.id) ──
     windowData.forEach(w => {
-      const wall = walls[w.wallIndex - 1]; // 1-based index
+      const wall = walls[w.wallIndex - 1];
       if (!wall) return;
       addWindow(wall.id, w.posT, w.winWidth, w.winHeight, w.sillHeight);
     });
@@ -367,12 +410,43 @@ async function init() {
       addDoor(wall.id, d.posT, d.doorWidth, d.doorHeight);
     });
 
-    setStatus(`✓ ${wallData.length} walls · ${windowData.length} windows · ${doorData.length} doors  |  Click a door to open/close`);
+    setStatus(`✓ ${imageName} · ${wallData.length} walls · ${windowData.length} windows · ${doorData.length} doors  |  Click a door to open/close`);
 
   } catch (err) {
     console.error('[FloorPlan] Failed to load data:', err);
-    setError(err.message);
+    setError(`Backend error: ${err.message}. Is the Flask server running on port 5000?`);
+  } finally {
+    hideLoading();
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════════
+
+async function init() {
+  setStatus('Connecting to backend…');
+  wireButtons();
+
+  // ── Populate image dropdown ──
+  const imageSelect = document.getElementById('image-select');
+  if (imageSelect) {
+    try {
+      const images = await fetchImageList();
+      images.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name.replace('.png', '');
+        imageSelect.appendChild(opt);
+      });
+    } catch (_) {
+      // fetchImageList already falls back gracefully
+    }
+  }
+
+  // ── Auto-load first image ──
+  const firstImage = imageSelect?.value || 'F3.png';
+  await loadFloorPlan(firstImage);
 }
 
 init();
