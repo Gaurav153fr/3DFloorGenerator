@@ -5,11 +5,14 @@
  *
  * @param {THREE.PerspectiveCamera} camera
  * @param {THREE.WebGLRenderer} renderer
+ * @param {HTMLElement} [container] - if provided, sizes to container instead of window
  */
-export function setupResizeHandler(camera, renderer) {
+export function setupResizeHandler(camera, renderer, container) {
   window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const w = container ? container.clientWidth  : window.innerWidth;
+    const h = container ? container.clientHeight : window.innerHeight;
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(w, h);
   });
 }

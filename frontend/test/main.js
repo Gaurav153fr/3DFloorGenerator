@@ -1,26 +1,23 @@
-// src/main.js  —  Application entry point
-// Walls · Windows (with openings) · Animated Doors
+// test/main.js  —  3D Floor Plan Editor: Walls · Windows · Doors
+// Uses existing src/ modules + WindowBuilder + DoorBuilder
 
 import * as THREE from 'three';
-import { createScene }             from './scene/SceneManager.js';
-import { createRenderer }          from './scene/RendererManager.js';
-import { createCamera }            from './scene/CameraManager.js';
-import { setupLighting }           from './scene/LightingManager.js';
-import { createGround }            from './scene/Ground.js';
-import { setupResizeHandler }      from './core/ResizeHandler.js';
-import { rebuildWallWithOpenings } from './builders/WallBuilder.js';
-import { createWindowOnWall }      from './builders/WindowBuilder.js';
-import { createDoor }              from './builders/DoorBuilder.js';
-import { fetchWallData, fetchWindowData, fetchDoorData } from './services/floorPlanApi.js';
-import { setStatus, setError }     from './ui/StatusUI.js';
+import { createScene }             from '../src/scene/SceneManager.js';
+import { createRenderer }          from '../src/scene/RendererManager.js';
+import { createCamera }            from '../src/scene/CameraManager.js';
+import { setupLighting }           from '../src/scene/LightingManager.js';
+import { createGround }            from '../src/scene/Ground.js';
+import { rebuildWallWithOpenings } from '../src/builders/WallBuilder.js';
+import { createWindowOnWall }      from '../src/builders/WindowBuilder.js';
+import { createDoor }              from '../src/builders/DoorBuilder.js';
 
 // ═══════════════════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════════════════
 
-let walls   = [];  // { id, x1, y1, x2, y2, meshes: THREE.Mesh[] }
-let windows = [];  // { id, wallId, posT, winWidth, winHeight, sillHeight, group }
-let doors   = [];  // { id, wallId, posT, doorWidth, doorHeight, door }
+let walls   = [];   // { id, x1, y1, x2, y2, meshes }
+let windows = [];   // { id, wallId, posT, winWidth, winHeight, sillHeight, group }
+let doors   = [];   // { id, wallId, posT, doorWidth, doorHeight, door (DoorBuilder object) }
 let wallIdCounter = 0;
 let winIdCounter  = 0;
 let doorIdCounter = 0;
@@ -34,20 +31,29 @@ const { scene }            = createScene();
 const container            = document.getElementById('canvas-container');
 const { renderer }         = createRenderer(container);
 const { camera, controls } = createCamera(renderer);
-
 setupLighting(scene);
 createGround(scene);
-setupResizeHandler(camera, renderer, container);
 
-// Custom animation loop — updates door animations each frame
+// ── Custom animation loop (allows door .update() calls each frame) ──
 renderer.setAnimationLoop(() => {
   controls.update();
-  doors.forEach(d => d.door.update());
+  doors.forEach(d => d.door.update()); // animate all door panels
   renderer.render(scene, camera);
 });
 
+// Resize renderer to canvas-container div
+function resizeRenderer() {
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resizeRenderer);
+resizeRenderer();
+
 // ═══════════════════════════════════════════════════════════════════
-//  RAYCASTER — click door panels to open/close
+//  RAYCASTER – click doors to toggle open/close
 // ═══════════════════════════════════════════════════════════════════
 
 const raycaster = new THREE.Raycaster();
@@ -55,24 +61,29 @@ const mouse     = new THREE.Vector2();
 
 renderer.domElement.addEventListener('click', (e) => {
   const rect = renderer.domElement.getBoundingClientRect();
-  mouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
-  mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+  mouse.x = ((e.clientX - rect.left)  / rect.width)  * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
+
+  // Collect all door panel meshes
   const panelMeshes = doors.map(d => d.door.panelMesh);
   const hits = raycaster.intersectObjects(panelMeshes, true);
 
   if (hits.length > 0) {
+    // Walk up to find the door panel mesh
     let hitObj = hits[0].object;
-    while (hitObj.parent && !panelMeshes.includes(hitObj)) hitObj = hitObj.parent;
-    const entry = doors.find(d => d.door.panelMesh === hitObj);
-    if (entry) {
-      entry.door.toggle();
+    while (hitObj.parent && !panelMeshes.includes(hitObj)) {
+      hitObj = hitObj.parent;
+    }
+    const doorEntry = doors.find(d => d.door.panelMesh === hitObj);
+    if (doorEntry) {
+      doorEntry.door.toggle();
       refreshDoorList();
-      setStatus(entry.door.isOpen
-        ? `🚪 ${entry.door.label} — opened`
-        : `🚪 ${entry.door.label} — closed`
-      );
+      const statusEl = document.getElementById('status');
+      statusEl.textContent = doorEntry.door.isOpen
+        ? `🚪 ${doorEntry.door.label} opened`
+        : `🚪 ${doorEntry.door.label} closed`;
     }
   }
 });
@@ -82,15 +93,21 @@ renderer.domElement.addEventListener('click', (e) => {
 // ═══════════════════════════════════════════════════════════════════
 
 function openingsForWall(wallId) {
-  const winOps = windows
+  const winOpenings = windows
     .filter(w => w.wallId === wallId)
-    .map(w => ({ posT: w.posT, winWidth: w.winWidth, winHeight: w.winHeight, sillHeight: w.sillHeight }));
+    .map(w => ({
+      posT: w.posT, winWidth: w.winWidth,
+      winHeight: w.winHeight, sillHeight: w.sillHeight,
+    }));
 
-  const doorOps = doors
+  const doorOpenings = doors
     .filter(d => d.wallId === wallId)
-    .map(d => ({ posT: d.posT, winWidth: d.doorWidth, winHeight: d.doorHeight, sillHeight: 0 }));
+    .map(d => ({
+      posT: d.posT, winWidth: d.doorWidth,
+      winHeight: d.doorHeight, sillHeight: 0, // doors go to the floor
+    }));
 
-  return [...winOps, ...doorOps];
+  return [...winOpenings, ...doorOpenings];
 }
 
 function refreshWallGeometry(wallId) {
@@ -108,24 +125,20 @@ function refreshWallGeometry(wallId) {
 //  WALL CRUD
 // ═══════════════════════════════════════════════════════════════════
 
-function addWall(x1, y1, x2, y2) {
-  if ([x1, y1, x2, y2].some(isNaN)) return null;
+function addWall() {
+  const x1 = parseFloat(document.getElementById('wall-x1').value);
+  const y1 = parseFloat(document.getElementById('wall-y1').value);
+  const x2 = parseFloat(document.getElementById('wall-x2').value);
+  const y2 = parseFloat(document.getElementById('wall-y2').value);
+  if ([x1, y1, x2, y2].some(isNaN)) return;
+
   const id   = ++wallIdCounter;
   const wall = { id, x1, y1, x2, y2, meshes: [] };
   walls.push(wall);
   wall.meshes = rebuildWallWithOpenings(scene, wall, [], []);
   refreshWallList();
-  refreshAllSelects();
+  refreshWallSelect();
   updateStats();
-  return wall;
-}
-
-function addWallFromInputs() {
-  const x1 = parseFloat(document.getElementById('wall-x1').value);
-  const y1 = parseFloat(document.getElementById('wall-y1').value);
-  const x2 = parseFloat(document.getElementById('wall-x2').value);
-  const y2 = parseFloat(document.getElementById('wall-y2').value);
-  addWall(x1, y1, x2, y2);
 }
 
 function removeWall(id) {
@@ -138,7 +151,7 @@ function removeWall(id) {
   doors.filter(d => d.wallId === id).forEach(d => d.door.dispose());
   doors = doors.filter(d => d.wallId !== id);
   refreshWallList();
-  refreshAllSelects();
+  refreshWallSelect();
   refreshWindowList();
   refreshDoorList();
   updateStats();
@@ -159,7 +172,7 @@ function refreshWallList() {
   });
 }
 
-function refreshAllSelects() {
+function refreshWallSelect() {
   ['win-wall-select', 'door-wall-select'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
@@ -177,25 +190,21 @@ function refreshAllSelects() {
 //  WINDOW CRUD
 // ═══════════════════════════════════════════════════════════════════
 
-function addWindow(wallId, posT, winWidth, winHeight, sillHeight) {
-  const wall = walls.find(w => w.id === wallId);
+function addWindow() {
+  const wallId     = parseInt(document.getElementById('win-wall-select').value);
+  const wall       = walls.find(w => w.id === wallId);
   if (!wall) return;
+  const posT       = parseFloat(document.getElementById('win-pos').value);
+  const winWidth   = parseFloat(document.getElementById('win-width').value);
+  const winHeight  = parseFloat(document.getElementById('win-height').value);
+  const sillHeight = parseFloat(document.getElementById('win-sill').value);
+
   const id    = ++winIdCounter;
   const group = createWindowOnWall(scene, wall, { posT, winWidth, winHeight, sillHeight });
   windows.push({ id, wallId, posT, winWidth, winHeight, sillHeight, group });
   refreshWallGeometry(wallId);
   refreshWindowList();
   updateStats();
-  return id;
-}
-
-function addWindowFromInputs() {
-  const wallId     = parseInt(document.getElementById('win-wall-select').value);
-  const posT       = parseFloat(document.getElementById('win-pos').value);
-  const winWidth   = parseFloat(document.getElementById('win-width').value);
-  const winHeight  = parseFloat(document.getElementById('win-height').value);
-  const sillHeight = parseFloat(document.getElementById('win-sill').value);
-  addWindow(wallId, posT, winWidth, winHeight, sillHeight);
 }
 
 function removeWindow(id) {
@@ -239,7 +248,7 @@ function selectWindow(id) {
 
 function applyWindowChanges() {
   if (!selectedWin) return;
-  const wd = selectedWin;
+  const wd     = selectedWin;
   scene.remove(wd.group);
   wd.posT       = parseFloat(document.getElementById('sel-pos').value);
   wd.winWidth   = parseFloat(document.getElementById('sel-width').value);
@@ -258,25 +267,22 @@ function applyWindowChanges() {
 //  DOOR CRUD
 // ═══════════════════════════════════════════════════════════════════
 
-function addDoor(wallId, posT, doorWidth, doorHeight) {
-  const wall = walls.find(w => w.id === wallId);
+function addDoor() {
+  const wallId    = parseInt(document.getElementById('door-wall-select').value);
+  const wall      = walls.find(w => w.id === wallId);
   if (!wall) return;
+  const posT      = parseFloat(document.getElementById('door-pos').value);
+  const doorWidth = parseFloat(document.getElementById('door-width').value);
+  const doorHeight= parseFloat(document.getElementById('door-height').value);
+
   const id    = ++doorIdCounter;
   const label = `Door ${id} (W${wallId})`;
   const door  = createDoor(scene, wall, { posT, doorWidth, doorHeight, label });
+
   doors.push({ id, wallId, posT, doorWidth, doorHeight, door });
-  refreshWallGeometry(wallId);
+  refreshWallGeometry(wallId); // cut opening in wall
   refreshDoorList();
   updateStats();
-  return id;
-}
-
-function addDoorFromInputs() {
-  const wallId     = parseInt(document.getElementById('door-wall-select').value);
-  const posT       = parseFloat(document.getElementById('door-pos').value);
-  const doorWidth  = parseFloat(document.getElementById('door-width').value);
-  const doorHeight = parseFloat(document.getElementById('door-height').value);
-  addDoor(wallId, posT, doorWidth, doorHeight);
 }
 
 function removeDoor(id) {
@@ -284,7 +290,7 @@ function removeDoor(id) {
   if (!entry) return;
   entry.door.dispose();
   doors = doors.filter(d => d.id !== id);
-  refreshWallGeometry(entry.wallId);
+  refreshWallGeometry(entry.wallId); // heal wall
   refreshDoorList();
   updateStats();
 }
@@ -295,12 +301,16 @@ function refreshDoorList() {
   doors.forEach(entry => {
     const item = document.createElement('div');
     item.className = 'list-item';
-    const icon = entry.door.isOpen ? '🔓' : '🔒';
-    item.innerHTML = `<span>${icon} ${entry.door.label} · t=${entry.posT}</span>`;
+    const stateIcon = entry.door.isOpen ? '🔓' : '🔒';
+    item.innerHTML = `<span>${stateIcon} ${entry.door.label} · pos=${entry.posT}</span>`;
     const del = document.createElement('button');
     del.className = 'del-btn'; del.textContent = '✕';
     del.onclick = (e) => { e.stopPropagation(); removeDoor(entry.id); };
-    item.onclick = () => { entry.door.toggle(); refreshDoorList(); };
+    // Toggle on list-item click too
+    item.onclick = () => {
+      entry.door.toggle();
+      refreshDoorList();
+    };
     item.appendChild(del);
     list.appendChild(item);
   });
@@ -311,68 +321,77 @@ function refreshDoorList() {
 // ═══════════════════════════════════════════════════════════════════
 
 function updateStats() {
-  const el = document.getElementById('stat-counts');
-  if (el) el.textContent = `Walls: ${walls.length}  ·  Windows: ${windows.length}  ·  Doors: ${doors.length}`;
+  document.getElementById('stat-walls').textContent   = walls.length;
+  document.getElementById('stat-windows').textContent = windows.length;
+  document.getElementById('stat-doors').textContent   = doors.length;
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  WIRE UI BUTTONS
+//  WIRE BUTTONS
 // ═══════════════════════════════════════════════════════════════════
 
-function wireButtons() {
-  document.getElementById('add-wall-btn')  ?.addEventListener('click', addWallFromInputs);
-  document.getElementById('add-win-btn')   ?.addEventListener('click', addWindowFromInputs);
-  document.getElementById('apply-size-btn')?.addEventListener('click', applyWindowChanges);
-  document.getElementById('delete-win-btn')?.addEventListener('click', () => { if (selectedWin) removeWindow(selectedWin.id); });
-  document.getElementById('add-door-btn')  ?.addEventListener('click', addDoorFromInputs);
-
-  // Sidebar toggle
-  document.getElementById('sidebar-toggle')?.addEventListener('click', () => {
-    document.getElementById('sidebar').classList.toggle('collapsed');
-  });
-}
+document.getElementById('add-wall-btn').addEventListener('click', addWall);
+document.getElementById('add-win-btn').addEventListener('click', addWindow);
+document.getElementById('apply-size-btn').addEventListener('click', applyWindowChanges);
+document.getElementById('delete-win-btn').addEventListener('click', () => { if (selectedWin) removeWindow(selectedWin.id); });
+document.getElementById('add-door-btn').addEventListener('click', addDoor);
 
 // ═══════════════════════════════════════════════════════════════════
-//  INIT — fetch data and seed scene
+//  SEED DATA  –  matches floorPlanApi.js mock layout
 // ═══════════════════════════════════════════════════════════════════
 
-async function init() {
-  setStatus('Fetching floor plan…');
-  wireButtons();
+// ── Walls ──
+const presetWalls = [
+  { x1: 0,   y1: 0,   x2: 200, y2: 0   },  // W1 – Bottom
+  { x1: 200, y1: 0,   x2: 200, y2: 150 },  // W2 – Right
+  { x1: 200, y1: 150, x2: 0,   y2: 150 },  // W3 – Top
+  { x1: 0,   y1: 150, x2: 0,   y2: 0   },  // W4 – Left
+  { x1: 100, y1: 0,   x2: 100, y2: 100 },  // W5 – Interior divider
+];
+presetWalls.forEach(pw => {
+  document.getElementById('wall-x1').value = pw.x1;
+  document.getElementById('wall-y1').value = pw.y1;
+  document.getElementById('wall-x2').value = pw.x2;
+  document.getElementById('wall-y2').value = pw.y2;
+  addWall();
+});
 
-  try {
-    // ── Fetch all data ──
-    const [wallData, windowData, doorData] = await Promise.all([
-      fetchWallData(),
-      fetchWindowData(),
-      fetchDoorData(),
-    ]);
+// ── Windows ──
+const presetWindows = [
+  { wallId: 1, posT: 0.25, winWidth: 14, winHeight: 7, sillHeight: 3 }, // Bottom-left
+  { wallId: 1, posT: 0.75, winWidth: 14, winHeight: 7, sillHeight: 3 }, // Bottom-right
+  { wallId: 2, posT: 0.4,  winWidth: 12, winHeight: 7, sillHeight: 4 }, // Right wall
+  { wallId: 3, posT: 0.5,  winWidth: 16, winHeight: 8, sillHeight: 3 }, // Top wall
+];
+presetWindows.forEach(pw => {
+  document.getElementById('win-wall-select').value = pw.wallId;
+  document.getElementById('win-pos').value    = pw.posT;
+  document.getElementById('win-width').value  = pw.winWidth;
+  document.getElementById('win-height').value = pw.winHeight;
+  document.getElementById('win-sill').value   = pw.sillHeight;
+  addWindow();
+});
 
-    // ── Build walls ──
-    wallData.forEach(seg => {
-      addWall(seg.start.x, seg.start.y, seg.end.x, seg.end.y);
-    });
+// ── Doors  (from mock backend data – placed at natural positions) ──
+// Door 1 – left exterior wall (W4) at 25% from bottom → entrance
+// Door 2 – interior dividing wall (W5) at 70% → passage between rooms
+const MOCK_DOOR_DATA = [
+  { wallId: 4, posT: 0.25, doorWidth: 6, doorHeight: 9 }, // entrance
+  { wallId: 5, posT: 0.70, doorWidth: 6, doorHeight: 9 }, // interior passage
+];
+MOCK_DOOR_DATA.forEach(pd => {
+  document.getElementById('door-wall-select').value = pd.wallId;
+  document.getElementById('door-pos').value    = pd.posT;
+  document.getElementById('door-width').value  = pd.doorWidth;
+  document.getElementById('door-height').value  = pd.doorHeight;
+  addDoor();
+});
 
-    // ── Build windows (wallIndex is 1-based → map to wall.id) ──
-    windowData.forEach(w => {
-      const wall = walls[w.wallIndex - 1]; // 1-based index
-      if (!wall) return;
-      addWindow(wall.id, w.posT, w.winWidth, w.winHeight, w.sillHeight);
-    });
+// Reset wall inputs
+document.getElementById('wall-x1').value = 0;
+document.getElementById('wall-y1').value = 0;
+document.getElementById('wall-x2').value = 100;
+document.getElementById('wall-y2').value = 0;
 
-    // ── Build doors ──
-    doorData.forEach(d => {
-      const wall = walls[d.wallIndex - 1];
-      if (!wall) return;
-      addDoor(wall.id, d.posT, d.doorWidth, d.doorHeight);
-    });
-
-    setStatus(`✓ ${wallData.length} walls · ${windowData.length} windows · ${doorData.length} doors  |  Click a door to open/close`);
-
-  } catch (err) {
-    console.error('[FloorPlan] Failed to load data:', err);
-    setError(err.message);
-  }
-}
-
-init();
+document.getElementById('status').textContent =
+  `✓ Ready — ${walls.length} walls · ${windows.length} windows · ${doors.length} doors · click a door to toggle`;

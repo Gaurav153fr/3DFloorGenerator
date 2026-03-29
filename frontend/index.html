@@ -3,15 +3,120 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>3D Floor Plan</title>
+    <title>3D Floor Plan Generator</title>
+    <meta name="description" content="Interactive 3D floor plan generator with walls, windows and animated doors powered by Three.js" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/src/styles/main.css" />
   </head>
   <body>
-    <div id="ui">
-      <h2>Modern Floor Plan</h2>
-      <div id="status">Initializing Environment...</div>
+
+    <!-- ── Header ── -->
+    <header>
+      <span class="logo">🏗️</span>
+      <h1>3D Floor Plan Generator</h1>
+      <span class="tag">Three.js · Modular · Interactive</span>
+    </header>
+
+    <div class="workspace">
+
+      <!-- ── Sidebar toggle button ── -->
+      <button id="sidebar-toggle" title="Toggle sidebar">◀</button>
+
+      <!-- ────────── Sidebar ────────── -->
+      <aside id="sidebar">
+
+        <!-- Wall Segments -->
+        <div>
+          <div class="sec-title">Wall Segments</div>
+          <label>Start (x1, y1)</label>
+          <div class="row2" style="margin-bottom:6px">
+            <input type="number" id="wall-x1" value="0" />
+            <input type="number" id="wall-y1" value="0" />
+          </div>
+          <label>End (x2, y2)</label>
+          <div class="row2" style="margin-bottom:8px">
+            <input type="number" id="wall-x2" value="100" />
+            <input type="number" id="wall-y2" value="0" />
+          </div>
+          <button class="btn btn-primary" id="add-wall-btn">+ Add Wall</button>
+          <div class="list-box" id="wall-list" style="margin-top:8px"></div>
+        </div>
+
+        <hr style="border-color:var(--border)" />
+
+        <!-- Add Window -->
+        <div>
+          <div class="sec-title">Add Window on Wall</div>
+          <label>Wall</label>
+          <select id="win-wall-select" style="margin-bottom:6px"></select>
+
+          <label>Position along wall (0–1)</label>
+          <input type="number" id="win-pos" value="0.5" min="0" max="1" step="0.05" style="margin-bottom:6px" />
+
+          <div class="row2" style="margin-bottom:6px">
+            <div><label>Width</label><input type="number" id="win-width" value="14" min="2" /></div>
+            <div><label>Height</label><input type="number" id="win-height" value="7" min="2" /></div>
+          </div>
+          <label>Sill height from floor</label>
+          <input type="number" id="win-sill" value="3" min="0" style="margin-bottom:8px" />
+          <button class="btn btn-success" id="add-win-btn">+ Place Window</button>
+          <div class="list-box" id="win-list" style="margin-top:8px"></div>
+        </div>
+
+        <hr style="border-color:var(--border)" />
+
+        <!-- Selected Window -->
+        <div id="sel-section" style="display:none">
+          <div class="sec-title">Selected Window</div>
+          <label>Position (0–1)</label>
+          <input type="number" id="sel-pos" min="0" max="1" step="0.05" style="margin-bottom:6px" />
+          <div class="row2" style="margin-bottom:6px">
+            <div><label>Width</label><input type="number" id="sel-width" min="2" /></div>
+            <div><label>Height</label><input type="number" id="sel-height" min="2" /></div>
+          </div>
+          <label>Sill height</label>
+          <input type="number" id="sel-sill" min="0" style="margin-bottom:8px" />
+          <button class="btn btn-primary" id="apply-size-btn" style="margin-bottom:6px">Apply Changes</button>
+          <button class="btn btn-danger"  id="delete-win-btn">Delete Window</button>
+        </div>
+
+        <hr style="border-color:var(--border)" />
+
+        <!-- Doors -->
+        <div>
+          <div class="sec-title">🚪 Doors</div>
+          <label>Wall</label>
+          <select id="door-wall-select" style="margin-bottom:6px"></select>
+
+          <label>Position along wall (0–1)</label>
+          <input type="number" id="door-pos" value="0.5" min="0" max="1" step="0.05" style="margin-bottom:6px" />
+
+          <div class="row2" style="margin-bottom:8px">
+            <div><label>Width</label><input type="number" id="door-width" value="6" min="2" /></div>
+            <div><label>Height</label><input type="number" id="door-height" value="9" min="2" /></div>
+          </div>
+          <button class="btn btn-success" id="add-door-btn">+ Add Door</button>
+          <div class="list-box" id="door-list" style="margin-top:8px"></div>
+        </div>
+
+        <div class="hint">
+          Orbit: drag · Zoom: scroll<br>
+          <b>Click a door</b> in the viewport to open/close<br>
+          Click door in list to toggle · ✕ to delete
+        </div>
+      </aside>
+
+      <!-- ── 3D Viewport ── -->
+      <div id="canvas-container"></div>
     </div>
-    <div id="canvas-container"></div>
+
+    <!-- ── Status bar ── -->
+    <div class="statusbar">
+      <span id="stat-counts"></span>
+      <span id="status">Initializing…</span>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

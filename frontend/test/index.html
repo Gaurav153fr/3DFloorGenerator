@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D Floor Plan – Walls · Windows · Doors</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0b0d13;
+      --panel:    #12151f;
+      --border:   #1e2338;
+      --accent:   #3d8ef0;
+      --accent2:  #5ba3f5;
+      --text:     #d8e0f0;
+      --muted:    #586070;
+      --danger:   #e05050;
+      --success:  #48c78e;
+    }
+
+    body {
+      background: var(--bg);
+      font-family: 'Inter', sans-serif;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      height: 48px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 20px;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+    header .logo { font-size: 18px; }
+    header h1    { font-size: 15px; font-weight: 700; color: var(--accent2); letter-spacing: .3px; }
+    header .tag  { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+    /* ── Workspace ── */
+    .workspace {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    aside {
+      width: 270px;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      padding: 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+
+    .sec-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+      color: var(--muted);
+      padding-bottom: 2px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 6px;
+    }
+
+    label { font-size: 11px; color: #7a88a8; display: block; margin-bottom: 3px; }
+
+    input[type="number"], select {
+      width: 100%;
+      background: #0f1219;
+      border: 1px solid #252c3d;
+      border-radius: 6px;
+      color: var(--text);
+      padding: 6px 8px;
+      font-size: 12px;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      transition: border-color .15s;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+    button.btn {
+      width: 100%;
+      padding: 8px;
+      border: none;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    button.btn:hover   { opacity: .87; transform: translateY(-1px); }
+    button.btn:active  { transform: none; }
+    button.btn-primary { background: linear-gradient(135deg,#2e70cc,#4a92f0); color:#fff; }
+    button.btn-success { background: linear-gradient(135deg,#1a8a60,#3ecf8e); color:#fff; }
+    button.btn-danger  { background: linear-gradient(135deg,#a83030,#e05252); color:#fff; }
+
+    /* List box */
+    .list-box {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #0d101a;
+      max-height: 130px;
+      overflow-y: auto;
+    }
+    .list-item {
+      padding: 6px 10px;
+      font-size: 11px;
+      color: #7a88a8;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+      transition: background .12s;
+    }
+    .list-item:last-child { border-bottom: none; }
+    .list-item:hover, .list-item.active {
+      background: #181f30;
+      color: var(--text);
+    }
+    .del-btn {
+      background: none;
+      border: none;
+      color: var(--danger);
+      font-size: 13px;
+      cursor: pointer;
+      padding: 0 3px;
+      line-height: 1;
+    }
+
+    .hint {
+      font-size: 10.5px;
+      color: var(--muted);
+      background: #0d1018;
+      border-left: 2px solid var(--accent);
+      border-radius: 0 5px 5px 0;
+      padding: 7px 10px;
+      line-height: 1.65;
+    }
+
+    /* ── Canvas container ── */
+    #canvas-container {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    #canvas-container canvas {
+      display: block;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* ── Status bar ── */
+    .statusbar {
+      height: 30px;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 0 16px;
+      font-size: 11px;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+    .statusbar span b { color: var(--accent2); }
+    #status { margin-left: auto; color: #48a87e; font-weight: 500; }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="logo">🏗️</span>
+  <h1>3D Floor Plan – Walls · Windows · Doors</h1>
+  <span class="tag">Three.js · Modular</span>
+</header>
+
+<div class="workspace">
+
+  <!-- ──────── Sidebar ──────── -->
+  <aside>
+
+    <!-- Wall section -->
+    <div>
+      <div class="sec-title">Wall Segments</div>
+      <label>Start (x1, y1)</label>
+      <div class="row2" style="margin-bottom:6px">
+        <input type="number" id="wall-x1" value="0" />
+        <input type="number" id="wall-y1" value="0" />
+      </div>
+      <label>End (x2, y2)</label>
+      <div class="row2" style="margin-bottom:8px">
+        <input type="number" id="wall-x2" value="100" />
+        <input type="number" id="wall-y2" value="0" />
+      </div>
+      <button class="btn btn-primary" id="add-wall-btn">+ Add Wall</button>
+      <div class="list-box" id="wall-list" style="margin-top:8px"></div>
+    </div>
+
+    <hr style="border-color:var(--border)" />
+
+    <!-- Add Window -->
+    <div>
+      <div class="sec-title">Add Window on Wall</div>
+      <label>Wall</label>
+      <select id="win-wall-select" style="margin-bottom:6px"></select>
+
+      <label>Position along wall (0–1)</label>
+      <input type="number" id="win-pos" value="0.5" min="0" max="1" step="0.05" style="margin-bottom:6px" />
+
+      <div class="row2" style="margin-bottom:6px">
+        <div>
+          <label>Width</label>
+          <input type="number" id="win-width" value="18" min="2" />
+        </div>
+        <div>
+          <label>Height</label>
+          <input type="number" id="win-height" value="7" min="2" />
+        </div>
+      </div>
+      <label>Sill height from floor</label>
+      <input type="number" id="win-sill" value="3" min="0" style="margin-bottom:8px" />
+      <button class="btn btn-success" id="add-win-btn">+ Place Window</button>
+      <div class="list-box" id="win-list" style="margin-top:8px"></div>
+    </div>
+
+    <hr style="border-color:var(--border)" />
+
+    <!-- Selected Window -->
+    <div id="sel-section" style="display:none">
+      <div class="sec-title">Selected Window</div>
+      <label>Position (0–1)</label>
+      <input type="number" id="sel-pos" min="0" max="1" step="0.05" style="margin-bottom:6px" />
+      <div class="row2" style="margin-bottom:6px">
+        <div>
+          <label>Width</label>
+          <input type="number" id="sel-width" min="2" />
+        </div>
+        <div>
+          <label>Height</label>
+          <input type="number" id="sel-height" min="2" />
+        </div>
+      </div>
+      <label>Sill height</label>
+      <input type="number" id="sel-sill" min="0" style="margin-bottom:8px" />
+      <button class="btn btn-primary" id="apply-size-btn" style="margin-bottom:6px">Apply Changes</button>
+      <button class="btn btn-danger"  id="delete-win-btn">Delete Window</button>
+    </div>
+
+    <hr style="border-color:var(--border)" />
+
+    <!-- Doors -->
+    <div>
+      <div class="sec-title">🚪 Doors</div>
+      <label>Wall</label>
+      <select id="door-wall-select" style="margin-bottom:6px"></select>
+
+      <label>Position along wall (0–1)</label>
+      <input type="number" id="door-pos" value="0.5" min="0" max="1" step="0.05" style="margin-bottom:6px" />
+
+      <div class="row2" style="margin-bottom:8px">
+        <div>
+          <label>Width</label>
+          <input type="number" id="door-width" value="6" min="2" />
+        </div>
+        <div>
+          <label>Height</label>
+          <input type="number" id="door-height" value="9" min="2" />
+        </div>
+      </div>
+      <button class="btn btn-success" id="add-door-btn">+ Add Door</button>
+      <div class="list-box" id="door-list" style="margin-top:8px"></div>
+    </div>
+
+    <div class="hint">
+      Orbit: drag · Zoom: scroll<br>
+      <b>Click a door</b> in the viewport to open/close it<br>
+      Click door in list to toggle · ✕ to delete
+    </div>
+  </aside>
+
+  <!-- ──────── 3D Viewport ──────── -->
+  <div id="canvas-container"></div>
+</div>
+
+<div class="statusbar">
+  <span>Walls: <b id="stat-walls">0</b></span>
+  <span>Windows: <b id="stat-windows">0</b></span>
+  <span>Doors: <b id="stat-doors">0</b></span>
+  <span id="status">Initializing…</span>
+</div>
+
+<script type="module" src="./main.js"></script>
+</body>
+</html>

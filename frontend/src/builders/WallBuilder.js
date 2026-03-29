@@ -7,42 +7,146 @@ const wallMaterial = new THREE.MeshStandardMaterial({
   color: MATERIALS.WALL.COLOR,
   roughness: MATERIALS.WALL.ROUGHNESS,
   metalness: MATERIALS.WALL.METALNESS,
+  // Polygon offset pushes wall surfaces slightly back in the depth buffer so
+  // frames, glass and door panels that sit on the same plane always win.
+  polygonOffset: true,
+  polygonOffsetFactor: 2,
+  polygonOffsetUnits: 2,
 });
 
+// ─── Low-level segment helper ─────────────────────────────────────────────────
+
 /**
- * Creates a 3D wall segment between two 2D points and adds it to the scene.
+ * Creates ONE rectangular box segment of a wall in local wall-space and adds
+ * it to the scene.
  *
  * @param {THREE.Scene} scene
- * @param {{ x: number, y: number }} start - 2D start point (y maps to Z axis)
- * @param {{ x: number, y: number }} end   - 2D end point
+ * @param {number}  ox, oz   – world origin (start point) of the wall
+ * @param {number}  angle    – wall rotation angle (atan2 of direction)
+ * @param {number}  localStart – distance along wall where segment begins
+ * @param {number}  localEnd   – distance along wall where segment ends
+ * @param {number}  yBottom  – bottom Y of segment (world units)
+ * @param {number}  yTop     – top    Y of segment (world units)
+ * @returns {THREE.Mesh}
+ */
+function makeWallSegment(scene, ox, oz, angle, localStart, localEnd, yBottom, yTop) {
+  const segLen = localEnd   - localStart;
+  const segH   = yTop       - yBottom;
+  if (segLen < 0.01 || segH < 0.01) return null;
+
+  const localCentre = (localStart + localEnd) / 2;
+  const yCentre     = (yBottom + yTop) / 2;
+
+  const cosA = Math.cos(angle);
+  const sinA = Math.sin(angle);
+
+  const geo  = new THREE.BoxGeometry(segLen, segH, WALL_THICKNESS);
+  const mesh = new THREE.Mesh(geo, wallMaterial);
+  mesh.position.set(ox + cosA * localCentre, yCentre, oz + sinA * localCentre);
+  mesh.rotation.y  = -angle;
+  mesh.castShadow    = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  return mesh;
+}
+
+// ─── Public API ───────────────────────────────────────────────────────────────
+
+/**
+ * Creates a simple solid wall between two 2D floor-plan points (no openings).
+ * Used by the main app for the initial build.
+ *
+ * @param {THREE.Scene} scene
+ * @param {{ x: number, y: number }} start
+ * @param {{ x: number, y: number }} end
+ * @returns {THREE.Mesh[]}
  */
 export function createWall(scene, start, end) {
   const x1 = start.x * SCALE, z1 = start.y * SCALE;
   const x2 = end.x   * SCALE, z2 = end.y   * SCALE;
+  const dx = x2 - x1, dz = z2 - z1;
+  const L  = Math.sqrt(dx * dx + dz * dz);
+  if (L < 0.1) return [];
 
-  const dx = x2 - x1;
-  const dz = z2 - z1;
-  const length = Math.sqrt(dx * dx + dz * dz);
-
-  if (length < 0.1) return; // Skip degenerate walls
-
-  const geo = new THREE.BoxGeometry(length, WALL_HEIGHT, WALL_THICKNESS);
-  const mesh = new THREE.Mesh(geo, wallMaterial);
-
-  mesh.position.set(x1 + dx / 2, WALL_HEIGHT / 2, z1 + dz / 2);
-  mesh.rotation.y = -Math.atan2(dz, dx);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-
-  scene.add(mesh);
+  const angle = Math.atan2(dz, dx);
+  const mesh  = makeWallSegment(scene, x1, z1, angle, 0, L, 0, WALL_HEIGHT);
+  return mesh ? [mesh] : [];
 }
 
 /**
- * Builds all walls from an array of wall segment data objects.
+ * Builds all walls from an array of wall segment data objects (no openings).
  *
  * @param {THREE.Scene} scene
  * @param {Array<{ start: { x, y }, end: { x, y } }>} wallData
  */
 export function buildWalls(scene, wallData) {
   wallData.forEach(({ start, end }) => createWall(scene, start, end));
+}
+
+/**
+ * Rebuilds a wall's mesh collection accounting for window openings.
+ * Removes old meshes from the scene, then creates the segmented replacement.
+ *
+ * @param {THREE.Scene}  scene
+ * @param {object}       wallInfo   – { x1, y1, x2, y2 } in floor-plan coords
+ * @param {THREE.Mesh[]} oldMeshes  – existing meshes to remove
+ * @param {Array<{posT: number, winWidth: number, winHeight: number, sillHeight: number}>} openings
+ *   All dimensions in WORLD units (already scaled); posT is 0-1 along the wall.
+ * @returns {THREE.Mesh[]}  new mesh list
+ */
+export function rebuildWallWithOpenings(scene, wallInfo, oldMeshes, openings) {
+  // ── Remove old meshes ──
+  oldMeshes.forEach(m => scene.remove(m));
+
+  // ── Wall geometry in scaled world space ──
+  const x1 = wallInfo.x1 * SCALE, z1 = wallInfo.y1 * SCALE;
+  const x2 = wallInfo.x2 * SCALE, z2 = wallInfo.y2 * SCALE;
+  const dx = x2 - x1, dz = z2 - z1;
+  const L  = Math.sqrt(dx * dx + dz * dz);
+  if (L < 0.1) return [];
+
+  const angle = Math.atan2(dz, dx);
+
+  // ── Sort openings left→right along the wall ──
+  const sorted = [...openings].sort((a, b) => a.posT - b.posT);
+
+  const newMeshes = [];
+
+  const add = (ls, le, yb, yt) => {
+    const m = makeWallSegment(scene, x1, z1, angle, ls, le, yb, yt);
+    if (m) newMeshes.push(m);
+  };
+
+  let cursor = 0; // position along the wall (local, world units)
+
+  for (const op of sorted) {
+    const halfW  = op.winWidth / 2;
+    const wLeft  = Math.max(0, op.posT * L - halfW);
+    const wRight = Math.min(L, op.posT * L + halfW);
+    const topOfWin = op.sillHeight + op.winHeight;
+
+    // ── Full-height segment before this window ──
+    if (wLeft > cursor + 0.01) {
+      add(cursor, wLeft, 0, WALL_HEIGHT);
+    }
+
+    // ── Sill (below window) ──
+    if (op.sillHeight > 0.01) {
+      add(wLeft, wRight, 0, op.sillHeight);
+    }
+
+    // ── Lintel (above window) ──
+    if (WALL_HEIGHT - topOfWin > 0.01) {
+      add(wLeft, wRight, topOfWin, WALL_HEIGHT);
+    }
+
+    cursor = wRight;
+  }
+
+  // ── Full-height segment after the last window ──
+  if (L > cursor + 0.01) {
+    add(cursor, L, 0, WALL_HEIGHT);
+  }
+
+  return newMeshes;
 }

@@ -9,7 +9,11 @@ import * as THREE from 'three';
 export function createRenderer(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  // Size to the container (not the full window) so sidebar space is respected
+  const w = container.clientWidth  || window.innerWidth;
+  const h = container.clientHeight || window.innerHeight;
+  renderer.setSize(w, h);
 
   // Shadows
   renderer.shadowMap.enabled = true;
