@@ -1,13 +1,285 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ps2-frontend</title>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Floor Plan Generator — Structural Intelligence</title>
+  <meta name="description" content="AI-powered 3D floor plan visualizer with structural material analysis, TransformControls editing, and Gemini chatbot.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles/main.css">
+  <link rel="stylesheet" href="/src/styles/structural.css">
+  <!-- Chart.js for Structural Analysis graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* ── Loading overlay ── */
+    #loading-overlay {
+      position: fixed; inset: 0;
+      background: #0b0d13;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 18px;
+      z-index: 9999;
+      transition: opacity 0.4s ease;
+    }
+    #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+    .ld-spinner {
+      width: 52px; height: 52px;
+      border: 3px solid #1e2338;
+      border-top-color: #5ba3f5;
+      border-radius: 50%;
+      animation: ldSpin 0.9s linear infinite;
+    }
+    @keyframes ldSpin { to { transform: rotate(360deg); } }
+    #loading-text { font-size: 13px; color: #586070; font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.5px; }
+
+    /* ── Header toggles & buttons ── */
+    .toggle-item { display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; margin: 0; font-size: 12px; }
+    .toggle-item input[type="checkbox"] { accent-color: #3d8ef0; width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
+
+    /* ── Properties panel (right sidebar, above structural) ── */
+    #props-panel {
+      position: fixed; top: 0; right: 380px;
+      width: 220px; height: 100vh;
+      background: #0b0d14;
+      border-left: 1px solid #1a1d2e;
+      display: flex; flex-direction: column;
+      z-index: 25;
+      transform: translateX(110%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      font-family: 'IBM Plex Sans', 'Inter', sans-serif;
+      overflow-y: auto;
+    }
+    #props-panel.open { transform: translateX(0); }
+    #props-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid #1a1d2e;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    #props-header h3 { font-size: 10px; font-family: 'IBM Plex Mono', monospace; color: #60a5fa; letter-spacing: 2px; text-transform: uppercase; margin: 0; }
+    #props-type { font-size: 9px; color: #4a4f6a; margin-top: 3px; }
+    #props-close { width: 24px; height: 24px; border-radius: 50%; background: #1a1d2e; border: none; color: #4a4f6a; cursor: pointer; font-size: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+    #props-close:hover { background: #2a2d3e; color: #fff; }
+    #props-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+
+    .prop-row { display: flex; flex-direction: column; gap: 4px; }
+    .prop-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px; color: #4a4f6a; font-family: 'IBM Plex Mono', monospace; }
+    .prop-val { font-size: 12px; color: #c8ccd8; }
+    input[type="color"].prop-color { width: 100%; height: 30px; border: 1px solid #1a1d2e; border-radius: 6px; background: transparent; cursor: pointer; padding: 1px; }
+    input[type="range"].prop-range { width: 100%; accent-color: #60a5fa; }
+    input[type="number"].prop-num { width: 100%; background: #0f1120; border: 1px solid #1a1d2e; border-radius: 5px; color: #c8ccd8; padding: 5px 8px; font-size: 11px; outline: none; }
+    input[type="number"].prop-num:focus { border-color: #60a5fa; }
+
+    .transform-btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
+    .tfbtn { padding: 6px 4px; background: #0f1120; border: 1px solid #1a1d2e; border-radius: 5px; color: #4a4f6a; font-family: 'IBM Plex Mono', monospace; font-size: 10px; cursor: pointer; text-align: center; transition: all 0.15s; }
+    .tfbtn:hover { border-color: #60a5fa; color: #60a5fa; }
+    .tfbtn.active { background: rgba(96,165,250,0.15); border-color: #60a5fa; color: #60a5fa; }
+
+    .props-divider { height: 1px; background: linear-gradient(90deg, transparent, #1a1d2e, transparent); margin: 4px 0; }
+
+    #props-delete-btn {
+      margin: 0 16px 16px;
+      padding: 8px;
+      background: linear-gradient(135deg, #7a1515, #c43030);
+      border: none; border-radius: 7px;
+      color: #fff; font-size: 11px; font-weight: 600;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    #props-delete-btn:hover { opacity: 0.85; }
+
+    /* ── Drag mode cursor ── */
+    body.drag-mode, body.drag-mode #canvas-container { cursor: grab !important; }
+    body.drag-mode.dragging, body.drag-mode.dragging #canvas-container { cursor: grabbing !important; }
+    body.transform-active #canvas-container { cursor: default !important; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Loading Overlay ────────────────────────────────────────── -->
+  <div id="loading-overlay">
+    <div class="ld-spinner"></div>
+    <p id="loading-text">Reconstructing 3D Architecture…</p>
+  </div>
+
+  <!-- ── Header ────────────────────────────────────────────────── -->
+  <header>
+    <span class="logo">🏗</span>
+    <h1>3D Floor Plan Generator</h1>
+
+    <!-- Image picker -->
+    <select id="image-select" style="width:130px; margin-left:14px;"></select>
+    <button id="load-plan-btn" class="btn btn-primary" style="width:auto;padding:5px 12px;margin-left:6px;font-size:11px;">Load</button>
+
+    <!-- Layer toggles -->
+    <div style="display:flex;align-items:center;gap:16px;margin-left:24px;">
+      <label class="toggle-item"><input type="checkbox" id="wall-toggle" checked><span>Walls</span></label>
+      <label class="toggle-item"><input type="checkbox" id="window-toggle" checked><span>Windows</span></label>
+      <label class="toggle-item"><input type="checkbox" id="gate-toggle" checked><span>Gates</span></label>
+    </div>
+
+    <!-- Transform mode buttons -->
+    <div style="display:flex;align-items:center;gap:4px;margin-left:24px;">
+      <button id="tf-translate" class="tfbtn active" title="Move (W)">↔ Move</button>
+      <button id="tf-rotate"    class="tfbtn"         title="Rotate (E)">↻ Rotate</button>
+      <button id="tf-scale"     class="tfbtn"         title="Scale (R)">⤡ Scale</button>
+      <button id="view-3d-btn" class="tfbtn active"         title="3D Model" style="margin-left: 10px; border-color: #2a2d40; background: #1a1d2e;">3D</button>
+      <button id="view-2d-btn" class="tfbtn"         title="2D Masks" style="border-color: #2a2d40; background: #1a1d2e;">2D</button>
+      <button id="fly-mode-btn" class="tfbtn"         title="Fly Mode: WASD + Drag to Look" style="margin-left: 10px; border-color: #2a2d40; background: #1a1d2e;">✈ Fly Mode</button>
+    </div>
+
+    <span class="tag" style="margin-left:auto;">STRUCTURAL INTELLIGENCE</span>
+  </header>
+
+  <!-- ── Workspace ─────────────────────────────────────────────── -->
+  <div class="workspace">
+    <button id="sidebar-toggle" title="Toggle sidebar">◀</button>
+
+    <!-- ── Left Sidebar ─────────────────────────────────────────── -->
+    <aside id="sidebar">
+
+      <!-- Add Wall -->
+      <section>
+        <div class="sec-title">Add Wall</div>
+        <div class="row2">
+          <div><label>X1</label><input type="number" id="wall-x1" value="10"></div>
+          <div><label>Y1</label><input type="number" id="wall-y1" value="10"></div>
+          <div><label>X2</label><input type="number" id="wall-x2" value="200"></div>
+          <div><label>Y2</label><input type="number" id="wall-y2" value="10"></div>
+        </div>
+        <button class="btn btn-primary" id="add-wall-btn" style="margin-top:6px">+ Add Wall</button>
+        <div class="list-box" style="margin-top:8px" id="wall-list"></div>
+      </section>
+
+      <!-- Add Window -->
+      <section>
+        <div class="sec-title">Add Window</div>
+        <label>On Wall</label><select id="win-wall-select"></select>
+        <div class="row2" style="margin-top:6px">
+          <div><label>Pos T (0–1)</label><input type="number" id="win-pos" value="0.5" step="0.05"></div>
+          <div><label>Width</label><input type="number" id="win-width" value="6"></div>
+          <div><label>Height</label><input type="number" id="win-height" value="7"></div>
+          <div><label>Sill H</label><input type="number" id="win-sill" value="3"></div>
+        </div>
+        <button class="btn btn-success" id="add-win-btn" style="margin-top:6px">+ Add Window</button>
+        <div class="list-box" style="margin-top:8px" id="win-list"></div>
+        <div id="sel-section" style="display:none;margin-top:10px">
+          <div class="sec-title">Edit Selected Window</div>
+          <div class="row2">
+            <div><label>Pos T</label><input type="number" id="sel-pos" step="0.05"></div>
+            <div><label>Width</label><input type="number" id="sel-width"></div>
+            <div><label>Height</label><input type="number" id="sel-height"></div>
+            <div><label>Sill H</label><input type="number" id="sel-sill"></div>
+          </div>
+          <div class="row2" style="margin-top:6px">
+            <button class="btn btn-primary" id="apply-size-btn">Apply</button>
+            <button class="btn btn-danger" id="delete-win-btn">Delete</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Add Door -->
+      <section>
+        <div class="sec-title">Add Door</div>
+        <label>On Wall</label><select id="door-wall-select"></select>
+        <div class="row2" style="margin-top:6px">
+          <div><label>Pos T (0–1)</label><input type="number" id="door-pos" value="0.5" step="0.05"></div>
+          <div><label>Width</label><input type="number" id="door-width" value="6"></div>
+          <div><label>Height</label><input type="number" id="door-height" value="9"></div>
+          <div><label>Swing (±1)</label><input type="number" id="door-swing" value="1" min="-1" max="1" step="2"></div>
+        </div>
+        <button class="btn btn-success" id="add-door-btn" style="margin-top:6px">+ Add Door</button>
+        <div class="list-box" style="margin-top:8px" id="door-list"></div>
+      </section>
+
+      <!-- Hint -->
+      <div class="hint">
+        🖱 <b>Left drag</b> orbit &nbsp;·&nbsp; <b>Right drag</b> pan &nbsp;·&nbsp; <b>Scroll</b> zoom<br>
+        🖱 <b>Click object</b> → select &amp; open properties<br>
+        ⌨ <b>W</b>=Move &nbsp;<b>E</b>=Rotate &nbsp;<b>R</b>=Scale &nbsp;<b>Del</b>=Delete<br>
+        🚪 <b>Click closed door</b> (no transform) → toggle open/close<br>
+        🏗 <b>Click wall</b> → structural analysis
+      </div>
+    </aside>
+
+    <!-- Canvas -->
+    <div id="canvas-container"></div>
+    
+    <!-- 2D Mask Panel -->
+    <div id="2d-panel" style="display: none; width: 100%; height: 100%; overflow-y: auto; overflow-x: hidden; padding: 20px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1400px; margin: 0 auto; padding-bottom: 50px;">
+        
+        <div class="mask-card" style="background: #1a1d2e; border: 1px solid #2a2d40; border-radius: 8px; padding: 15px;">
+          <h3 style="margin-top:0; font-size: 14px; color: #a5b4fc; text-transform: uppercase; letter-spacing: 1px;">Original Blueprint</h3>
+          <img id="mask-original" style="width: 100%; border-radius: 4px; border: 1px solid #2a2d40; background: #000;" src="" alt="Loading...">
+        </div>
+        
+        <div class="mask-card" style="background: #1a1d2e; border: 1px solid #2a2d40; border-radius: 8px; padding: 15px;">
+          <h3 style="margin-top:0; font-size: 14px; color: #818cf8; text-transform: uppercase; letter-spacing: 1px;">Wall Mask (Structural)</h3>
+          <img id="mask-walls" style="width: 100%; border-radius: 4px; border: 1px solid #2a2d40; background: #000;" src="" alt="Loading...">
+        </div>
+        
+        <div class="mask-card" style="background: #1a1d2e; border: 1px solid #2a2d40; border-radius: 8px; padding: 15px;">
+          <h3 style="margin-top:0; font-size: 14px; color: #34d399; text-transform: uppercase; letter-spacing: 1px;">Gate Detection Mask</h3>
+          <img id="mask-gates" style="width: 100%; border-radius: 4px; border: 1px solid #2a2d40; background: #000;" src="" alt="Loading...">
+        </div>
+        
+        <div class="mask-card" style="background: #1a1d2e; border: 1px solid #2a2d40; border-radius: 8px; padding: 15px;">
+          <h3 style="margin-top:0; font-size: 14px; color: #f87171; text-transform: uppercase; letter-spacing: 1px;">Window Detection Mask</h3>
+          <img id="mask-windows" style="width: 100%; border-radius: 4px; border: 1px solid #2a2d40; background: #000;" src="" alt="Loading...">
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Properties Panel (slides in from right, in front of structural) ── -->
+  <div id="props-panel">
+    <div id="props-header">
+      <div>
+        <h3>Properties</h3>
+        <div id="props-type">—</div>
+      </div>
+      <button id="props-close">✕</button>
+    </div>
+    <div id="props-body">
+      <!-- Transform mode -->
+      <div class="prop-row">
+        <div class="prop-lbl">Transform Mode</div>
+        <div class="transform-btns">
+          <button class="tfbtn active" data-mode="translate" id="pp-translate">↔ Move</button>
+          <button class="tfbtn"        data-mode="rotate"    id="pp-rotate">↻ Rotate</button>
+          <button class="tfbtn"        data-mode="scale"     id="pp-scale">⤡ Scale</button>
+        </div>
+      </div>
+      <div class="props-divider"></div>
+      <!-- Color -->
+      <div class="prop-row">
+        <div class="prop-lbl">Color</div>
+        <input type="color" class="prop-color" id="prop-color" value="#ffffff">
+      </div>
+      <!-- Opacity -->
+      <div class="prop-row">
+        <div class="prop-lbl">Opacity <span id="opacity-val" class="prop-val">1.0</span></div>
+        <input type="range" class="prop-range" id="prop-opacity" min="0" max="1" step="0.05" value="1">
+      </div>
+      <div class="props-divider"></div>
+      <!-- Position -->
+      <div class="prop-row">
+        <div class="prop-lbl">Position Y</div>
+        <input type="number" class="prop-num" id="prop-y" step="0.5" value="0">
+      </div>
+    </div>
+    <button id="props-delete-btn">🗑 Delete Selected</button>
+  </div>
+
+  <!-- ── Status Bar ─────────────────────────────────────────────── -->
+  <div class="statusbar">
+    <span id="stat-counts">Walls: 0 · Windows: 0 · Doors: 0</span>
+    <span id="status">Connecting to backend…</span>
+  </div>
+
+  <!-- Vite entry point — loads THREE + all modular code -->
+  <script type="module" src="/src/main.js"></script>
+
+</body>
 </html>
