@@ -140,7 +140,7 @@ export function rebuildWallWithOpenings(scene, wallInfo, oldMeshes, openings) {
       add(wLeft, wRight, topOfWin, WALL_HEIGHT);
     }
 
-    cursor = wRight;
+    cursor = Math.max(cursor, wRight);
   }
 
   // ── Full-height segment after the last window ──

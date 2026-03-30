@@ -4,13 +4,17 @@ export const SCALE = 0.2;
 export const WALL_HEIGHT = 12;
 export const WALL_THICKNESS = 1.2;
 
-export const API_URL = 'http://127.0.0.1:5000/api/data';
+// In dev: Vite proxies /api/* → http://127.0.0.1:5000 (see vite.config.js)
+// In production: ensure your server routes /api/* to the Flask backend.
+export const API_URL          = '/api/data';
+export const MATERIAL_API_URL = '/api/materials';
+export const CHAT_API_URL     = '/api/chat';
 
 export const CAMERA = {
-  FOV: 60,
-  NEAR: 1,
-  FAR: 2000,
-  INITIAL_POSITION: { x: 150, y: 150, z: 150 },
+  FOV: 50,
+  NEAR: 0.1,
+  FAR: 5000,
+  INITIAL_POSITION: { x: 80, y: 100, z: 120 },
 };
 
 export const SHADOWS = {

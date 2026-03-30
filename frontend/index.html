@@ -1,256 +1,255 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>3D Floor Plan Generator</title>
-    <meta name="description" content="Interactive 3D floor plan generator — upload any floor plan PNG and get a real-time 3D model powered by OpenCV + Three.js" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/src/styles/main.css" />
-    <style>
-      /* ── Loading Overlay ── */
-      #loading-overlay {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        display: none;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        background: rgba(10, 10, 20, 0.82);
-        backdrop-filter: blur(6px);
-        gap: 20px;
-      }
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Floor Plan Generator — Structural Intelligence</title>
+  <meta name="description" content="AI-powered 3D floor plan visualizer with structural material analysis, TransformControls editing, and Gemini chatbot.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/src/styles/main.css">
+  <link rel="stylesheet" href="/src/styles/structural.css">
+  <!-- Chart.js for Structural Analysis graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* ── Loading overlay ── */
+    #loading-overlay {
+      position: fixed; inset: 0;
+      background: #0b0d13;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 18px;
+      z-index: 9999;
+      transition: opacity 0.4s ease;
+    }
+    #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+    .ld-spinner {
+      width: 52px; height: 52px;
+      border: 3px solid #1e2338;
+      border-top-color: #5ba3f5;
+      border-radius: 50%;
+      animation: ldSpin 0.9s linear infinite;
+    }
+    @keyframes ldSpin { to { transform: rotate(360deg); } }
+    #loading-text { font-size: 13px; color: #586070; font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.5px; }
 
-      .loader-ring {
-        width: 56px;
-        height: 56px;
-        border: 4px solid rgba(255,255,255,0.12);
-        border-top-color: #6ee7ff;
-        border-radius: 50%;
-        animation: spin 0.85s linear infinite;
-      }
+    /* ── Header toggles & buttons ── */
+    .toggle-item { display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; margin: 0; font-size: 12px; }
+    .toggle-item input[type="checkbox"] { accent-color: #3d8ef0; width: 14px; height: 14px; cursor: pointer; flex-shrink: 0; }
 
-      @keyframes spin { to { transform: rotate(360deg); } }
+    /* ── Properties panel (right sidebar, above structural) ── */
+    #props-panel {
+      position: fixed; top: 0; right: 380px;
+      width: 220px; height: 100vh;
+      background: #0b0d14;
+      border-left: 1px solid #1a1d2e;
+      display: flex; flex-direction: column;
+      z-index: 25;
+      transform: translateX(110%);
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      font-family: 'IBM Plex Sans', 'Inter', sans-serif;
+      overflow-y: auto;
+    }
+    #props-panel.open { transform: translateX(0); }
+    #props-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid #1a1d2e;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    #props-header h3 { font-size: 10px; font-family: 'IBM Plex Mono', monospace; color: #e8ff47; letter-spacing: 2px; text-transform: uppercase; margin: 0; }
+    #props-type { font-size: 9px; color: #4a4f6a; margin-top: 3px; }
+    #props-close { width: 24px; height: 24px; border-radius: 50%; background: #1a1d2e; border: none; color: #4a4f6a; cursor: pointer; font-size: 12px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+    #props-close:hover { background: #2a2d3e; color: #fff; }
+    #props-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
 
-      #loading-text {
-        color: #c8e6ff;
-        font-family: 'Inter', sans-serif;
-        font-size: 0.95rem;
-        letter-spacing: 0.02em;
-        opacity: 0.9;
-      }
+    .prop-row { display: flex; flex-direction: column; gap: 4px; }
+    .prop-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.8px; color: #4a4f6a; font-family: 'IBM Plex Mono', monospace; }
+    .prop-val { font-size: 12px; color: #c8ccd8; }
+    input[type="color"].prop-color { width: 100%; height: 30px; border: 1px solid #1a1d2e; border-radius: 6px; background: transparent; cursor: pointer; padding: 1px; }
+    input[type="range"].prop-range { width: 100%; accent-color: #e8ff47; }
+    input[type="number"].prop-num { width: 100%; background: #0f1120; border: 1px solid #1a1d2e; border-radius: 5px; color: #c8ccd8; padding: 5px 8px; font-size: 11px; outline: none; }
+    input[type="number"].prop-num:focus { border-color: #e8ff47; }
 
-      /* ── Image Picker Bar ── */
-      .image-picker {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 8px;
-        margin-bottom: 12px;
-      }
+    .transform-btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
+    .tfbtn { padding: 6px 4px; background: #0f1120; border: 1px solid #1a1d2e; border-radius: 5px; color: #4a4f6a; font-family: 'IBM Plex Mono', monospace; font-size: 10px; cursor: pointer; text-align: center; transition: all 0.15s; }
+    .tfbtn:hover { border-color: #e8ff47; color: #e8ff47; }
+    .tfbtn.active { background: rgba(232,255,71,0.12); border-color: #e8ff47; color: #e8ff47; }
 
-      .image-picker label {
-        font-size: 0.72rem;
-        font-weight: 600;
-        color: var(--text-muted, #aaa);
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        white-space: nowrap;
-        margin: 0;
-      }
+    .props-divider { height: 1px; background: linear-gradient(90deg, transparent, #1a1d2e, transparent); margin: 4px 0; }
 
-      .image-picker select {
-        flex: 1;
-        min-width: 0;
-        padding: 5px 8px;
-        font-size: 0.82rem;
-        background: rgba(0,0,0,0.35);
-        color: #e8f4ff;
-        border: 1px solid rgba(110,231,255,0.3);
-        border-radius: 5px;
-        cursor: pointer;
-      }
+    #props-delete-btn {
+      margin: 0 16px 16px;
+      padding: 8px;
+      background: linear-gradient(135deg, #7a1515, #c43030);
+      border: none; border-radius: 7px;
+      color: #fff; font-size: 11px; font-weight: 600;
+      cursor: pointer; transition: opacity 0.15s;
+    }
+    #props-delete-btn:hover { opacity: 0.85; }
 
-      .image-picker select:focus { outline: none; border-color: #6ee7ff; }
+    /* ── Drag mode cursor ── */
+    body.drag-mode, body.drag-mode #canvas-container { cursor: grab !important; }
+    body.drag-mode.dragging, body.drag-mode.dragging #canvas-container { cursor: grabbing !important; }
+    body.transform-active #canvas-container { cursor: default !important; }
+  </style>
+</head>
+<body>
 
-      .btn-load {
-        padding: 5px 14px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        background: linear-gradient(135deg, #1a78c2, #0ea5e9);
-        color: #fff;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        white-space: nowrap;
-        transition: opacity 0.15s, transform 0.12s;
-      }
-      .btn-load:hover  { opacity: 0.88; transform: translateY(-1px); }
-      .btn-load:active { transform: translateY(0); }
+  <!-- ── Loading Overlay ────────────────────────────────────────── -->
+  <div id="loading-overlay">
+    <div class="ld-spinner"></div>
+    <p id="loading-text">Reconstructing 3D Architecture…</p>
+  </div>
 
-      /* ── Backend status badge ── */
-      .backend-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-        font-size: 0.68rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.07em;
-        padding: 2px 8px;
-        border-radius: 20px;
-        background: rgba(34,197,94,0.18);
-        color: #4ade80;
-        border: 1px solid rgba(34,197,94,0.3);
-        margin-left: auto;
-      }
-      .backend-badge::before {
-        content: '';
-        width: 6px; height: 6px;
-        background: #4ade80;
-        border-radius: 50%;
-        animation: pulse-dot 1.6s ease infinite;
-      }
-      @keyframes pulse-dot {
-        0%, 100% { opacity:1; transform: scale(1); }
-        50%       { opacity:0.4; transform: scale(0.7); }
-      }
-    </style>
-  </head>
-  <body>
+  <!-- ── Header ────────────────────────────────────────────────── -->
+  <header>
+    <span class="logo">🏗</span>
+    <h1>3D Floor Plan Generator</h1>
 
-    <!-- ── Loading Overlay ── -->
-    <div id="loading-overlay">
-      <div class="loader-ring"></div>
-      <div id="loading-text">Analysing floor plan…</div>
+    <!-- Image picker -->
+    <select id="image-select" style="width:130px; margin-left:14px;"></select>
+    <button id="load-plan-btn" class="btn btn-primary" style="width:auto;padding:5px 12px;margin-left:6px;font-size:11px;">Load</button>
+
+    <!-- Layer toggles -->
+    <div style="display:flex;align-items:center;gap:16px;margin-left:24px;">
+      <label class="toggle-item"><input type="checkbox" id="wall-toggle" checked><span>Walls</span></label>
+      <label class="toggle-item"><input type="checkbox" id="window-toggle" checked><span>Windows</span></label>
+      <label class="toggle-item"><input type="checkbox" id="gate-toggle" checked><span>Gates</span></label>
     </div>
 
-    <!-- ── Header ── -->
-    <header>
-      <span class="logo">🏗️</span>
-      <h1>3D Floor Plan Generator</h1>
-      <span class="tag">OpenCV · Three.js · Real-time</span>
-    </header>
-
-    <div class="workspace">
-
-      <!-- ── Sidebar toggle button ── -->
-      <button id="sidebar-toggle" title="Toggle sidebar">◀</button>
-
-      <!-- ────────── Sidebar ────────── -->
-      <aside id="sidebar">
-
-        <!-- Floor Plan Loader -->
-        <div>
-          <div class="sec-title" style="display:flex;align-items:center;gap:6px;">
-            📐 Floor Plan
-            <span class="backend-badge">Backend Live</span>
-          </div>
-          <div class="image-picker">
-            <label>Image</label>
-            <select id="image-select"></select>
-            <button class="btn-load" id="load-plan-btn">⟳ Load</button>
-          </div>
-        </div>
-
-        <hr style="border-color:var(--border)" />
-
-        <!-- Wall Segments -->
-        <div>
-          <div class="sec-title">Wall Segments</div>
-          <label>Start (x1, y1)</label>
-          <div class="row2" style="margin-bottom:6px">
-            <input type="number" id="wall-x1" value="0" />
-            <input type="number" id="wall-y1" value="0" />
-          </div>
-          <label>End (x2, y2)</label>
-          <div class="row2" style="margin-bottom:8px">
-            <input type="number" id="wall-x2" value="100" />
-            <input type="number" id="wall-y2" value="0" />
-          </div>
-          <button class="btn btn-primary" id="add-wall-btn">+ Add Wall</button>
-          <div class="list-box" id="wall-list" style="margin-top:8px"></div>
-        </div>
-
-        <hr style="border-color:var(--border)" />
-
-        <!-- Add Window -->
-        <div>
-          <div class="sec-title">Add Window on Wall</div>
-          <label>Wall</label>
-          <select id="win-wall-select" style="margin-bottom:6px"></select>
-
-          <label>Position along wall (0–1)</label>
-          <input type="number" id="win-pos" value="0.5" min="0" max="1" step="0.05" style="margin-bottom:6px" />
-
-          <div class="row2" style="margin-bottom:6px">
-            <div><label>Width</label><input type="number" id="win-width" value="14" min="2" /></div>
-            <div><label>Height</label><input type="number" id="win-height" value="7" min="2" /></div>
-          </div>
-          <label>Sill height from floor</label>
-          <input type="number" id="win-sill" value="3" min="0" style="margin-bottom:8px" />
-          <button class="btn btn-success" id="add-win-btn">+ Place Window</button>
-          <div class="list-box" id="win-list" style="margin-top:8px"></div>
-        </div>
-
-        <hr style="border-color:var(--border)" />
-
-        <!-- Selected Window -->
-        <div id="sel-section" style="display:none">
-          <div class="sec-title">Selected Window</div>
-          <label>Position (0–1)</label>
-          <input type="number" id="sel-pos" min="0" max="1" step="0.05" style="margin-bottom:6px" />
-          <div class="row2" style="margin-bottom:6px">
-            <div><label>Width</label><input type="number" id="sel-width" min="2" /></div>
-            <div><label>Height</label><input type="number" id="sel-height" min="2" /></div>
-          </div>
-          <label>Sill height</label>
-          <input type="number" id="sel-sill" min="0" style="margin-bottom:8px" />
-          <button class="btn btn-primary" id="apply-size-btn" style="margin-bottom:6px">Apply Changes</button>
-          <button class="btn btn-danger"  id="delete-win-btn">Delete Window</button>
-        </div>
-
-        <hr style="border-color:var(--border)" />
-
-        <!-- Doors -->
-        <div>
-          <div class="sec-title">🚪 Doors</div>
-          <label>Wall</label>
-          <select id="door-wall-select" style="margin-bottom:6px"></select>
-
-          <label>Position along wall (0–1)</label>
-          <input type="number" id="door-pos" value="0.5" min="0" max="1" step="0.05" style="margin-bottom:6px" />
-
-          <div class="row2" style="margin-bottom:8px">
-            <div><label>Width</label><input type="number" id="door-width" value="6" min="2" /></div>
-            <div><label>Height</label><input type="number" id="door-height" value="9" min="2" /></div>
-          </div>
-          <button class="btn btn-success" id="add-door-btn">+ Add Door</button>
-          <div class="list-box" id="door-list" style="margin-top:8px"></div>
-        </div>
-
-        <div class="hint">
-          Orbit: drag · Zoom: scroll<br>
-          <b>Click a door</b> in the viewport to open/close<br>
-          Click door in list to toggle · ✕ to delete
-        </div>
-      </aside>
-
-      <!-- ── 3D Viewport ── -->
-      <div id="canvas-container"></div>
+    <!-- Transform mode buttons -->
+    <div style="display:flex;align-items:center;gap:4px;margin-left:24px;">
+      <button id="tf-translate" class="tfbtn active" title="Move (W)">↔ Move</button>
+      <button id="tf-rotate"    class="tfbtn"         title="Rotate (E)">↻ Rotate</button>
+      <button id="tf-scale"     class="tfbtn"         title="Scale (R)">⤡ Scale</button>
     </div>
 
-    <!-- ── Status bar ── -->
-    <div class="statusbar">
-      <span id="stat-counts"></span>
-      <span id="status">Initializing…</span>
-    </div>
+    <span class="tag" style="margin-left:auto;">STRUCTURAL INTELLIGENCE</span>
+  </header>
 
-    <script type="module" src="/src/main.js"></script>
-  </body>
+  <!-- ── Workspace ─────────────────────────────────────────────── -->
+  <div class="workspace">
+    <button id="sidebar-toggle" title="Toggle sidebar">◀</button>
+
+    <!-- ── Left Sidebar ─────────────────────────────────────────── -->
+    <aside id="sidebar">
+
+      <!-- Add Wall -->
+      <section>
+        <div class="sec-title">Add Wall</div>
+        <div class="row2">
+          <div><label>X1</label><input type="number" id="wall-x1" value="10"></div>
+          <div><label>Y1</label><input type="number" id="wall-y1" value="10"></div>
+          <div><label>X2</label><input type="number" id="wall-x2" value="200"></div>
+          <div><label>Y2</label><input type="number" id="wall-y2" value="10"></div>
+        </div>
+        <button class="btn btn-primary" id="add-wall-btn" style="margin-top:6px">+ Add Wall</button>
+        <div class="list-box" style="margin-top:8px" id="wall-list"></div>
+      </section>
+
+      <!-- Add Window -->
+      <section>
+        <div class="sec-title">Add Window</div>
+        <label>On Wall</label><select id="win-wall-select"></select>
+        <div class="row2" style="margin-top:6px">
+          <div><label>Pos T (0–1)</label><input type="number" id="win-pos" value="0.5" step="0.05"></div>
+          <div><label>Width</label><input type="number" id="win-width" value="6"></div>
+          <div><label>Height</label><input type="number" id="win-height" value="7"></div>
+          <div><label>Sill H</label><input type="number" id="win-sill" value="3"></div>
+        </div>
+        <button class="btn btn-success" id="add-win-btn" style="margin-top:6px">+ Add Window</button>
+        <div class="list-box" style="margin-top:8px" id="win-list"></div>
+        <div id="sel-section" style="display:none;margin-top:10px">
+          <div class="sec-title">Edit Selected Window</div>
+          <div class="row2">
+            <div><label>Pos T</label><input type="number" id="sel-pos" step="0.05"></div>
+            <div><label>Width</label><input type="number" id="sel-width"></div>
+            <div><label>Height</label><input type="number" id="sel-height"></div>
+            <div><label>Sill H</label><input type="number" id="sel-sill"></div>
+          </div>
+          <div class="row2" style="margin-top:6px">
+            <button class="btn btn-primary" id="apply-size-btn">Apply</button>
+            <button class="btn btn-danger" id="delete-win-btn">Delete</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Add Door -->
+      <section>
+        <div class="sec-title">Add Door</div>
+        <label>On Wall</label><select id="door-wall-select"></select>
+        <div class="row2" style="margin-top:6px">
+          <div><label>Pos T (0–1)</label><input type="number" id="door-pos" value="0.5" step="0.05"></div>
+          <div><label>Width</label><input type="number" id="door-width" value="6"></div>
+          <div><label>Height</label><input type="number" id="door-height" value="9"></div>
+          <div><label>Swing (±1)</label><input type="number" id="door-swing" value="1" min="-1" max="1" step="2"></div>
+        </div>
+        <button class="btn btn-success" id="add-door-btn" style="margin-top:6px">+ Add Door</button>
+        <div class="list-box" style="margin-top:8px" id="door-list"></div>
+      </section>
+
+      <!-- Hint -->
+      <div class="hint">
+        🖱 <b>Left drag</b> orbit &nbsp;·&nbsp; <b>Right drag</b> pan &nbsp;·&nbsp; <b>Scroll</b> zoom<br>
+        🖱 <b>Click object</b> → select &amp; open properties<br>
+        ⌨ <b>W</b>=Move &nbsp;<b>E</b>=Rotate &nbsp;<b>R</b>=Scale &nbsp;<b>Del</b>=Delete<br>
+        🚪 <b>Click closed door</b> (no transform) → toggle open/close<br>
+        🏗 <b>Click wall</b> → structural analysis
+      </div>
+    </aside>
+
+    <!-- Canvas -->
+    <div id="canvas-container"></div>
+  </div>
+
+  <!-- ── Properties Panel (slides in from right, in front of structural) ── -->
+  <div id="props-panel">
+    <div id="props-header">
+      <div>
+        <h3>Properties</h3>
+        <div id="props-type">—</div>
+      </div>
+      <button id="props-close">✕</button>
+    </div>
+    <div id="props-body">
+      <!-- Transform mode -->
+      <div class="prop-row">
+        <div class="prop-lbl">Transform Mode</div>
+        <div class="transform-btns">
+          <button class="tfbtn active" data-mode="translate" id="pp-translate">↔ Move</button>
+          <button class="tfbtn"        data-mode="rotate"    id="pp-rotate">↻ Rotate</button>
+          <button class="tfbtn"        data-mode="scale"     id="pp-scale">⤡ Scale</button>
+        </div>
+      </div>
+      <div class="props-divider"></div>
+      <!-- Color -->
+      <div class="prop-row">
+        <div class="prop-lbl">Color</div>
+        <input type="color" class="prop-color" id="prop-color" value="#ffffff">
+      </div>
+      <!-- Opacity -->
+      <div class="prop-row">
+        <div class="prop-lbl">Opacity <span id="opacity-val" class="prop-val">1.0</span></div>
+        <input type="range" class="prop-range" id="prop-opacity" min="0" max="1" step="0.05" value="1">
+      </div>
+      <div class="props-divider"></div>
+      <!-- Position -->
+      <div class="prop-row">
+        <div class="prop-lbl">Position Y</div>
+        <input type="number" class="prop-num" id="prop-y" step="0.5" value="0">
+      </div>
+    </div>
+    <button id="props-delete-btn">🗑 Delete Selected</button>
+  </div>
+
+  <!-- ── Status Bar ─────────────────────────────────────────────── -->
+  <div class="statusbar">
+    <span id="stat-counts">Walls: 0 · Windows: 0 · Doors: 0</span>
+    <span id="status">Connecting to backend…</span>
+  </div>
+
+  <!-- Vite entry point — loads THREE + all modular code -->
+  <script type="module" src="/src/main.js"></script>
+
+</body>
 </html>

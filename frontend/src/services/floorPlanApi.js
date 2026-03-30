@@ -221,8 +221,13 @@ function adaptWindows(rawWindows, walls) {
 /**
  * Convert raw gate/door pixel data → frontend door descriptors.
  *
- * Backend gate: { start:{x,y}, end:{x,y}, width (px) }
- * Frontend door: { wallIndex (1-based), posT, doorWidth, doorHeight }
+ * Backend gate (hinge/strike format from reconstruct_gates_final):
+ *   { hinge:{x,y}, strike:{x,y}, width (px) }
+ * Backend gate (legacy start/end format):
+ *   { start:{x,y}, end:{x,y}, width (px), swingDir?, hingeAngleDeg? }
+ *
+ * Frontend door: { wallIndex (1-based), posT, doorWidth, doorHeight,
+ *                  hingeX, hingeY, strikeX, strikeY, swingDir, hingeAngleDeg }
  *
  * doorWidth  = gate.width * SCALE
  * doorHeight = fixed 9 world units (~standard door)
@@ -231,10 +236,15 @@ function adaptDoors(rawGates, walls) {
   const results = [];
 
   rawGates.forEach(gate => {
-    const midX = (gate.start.x + gate.end.x) / 2;
-    const midY = (gate.start.y + gate.end.y) / 2;
+    // Support both hinge/strike format (new) and start/end format (legacy)
+    const hinge  = gate.hinge  || gate.start;
+    const strike = gate.strike || gate.end;
+    if (!hinge || !strike) return;
 
-    const snap = snapToNearestWall(midX, midY, walls, 50); // doors can be further from wall center
+    const midX = (hinge.x + strike.x) / 2;
+    const midY = (hinge.y + strike.y) / 2;
+
+    const snap = snapToNearestWall(midX, midY, walls, 50);
     if (!snap) return;
 
     const doorWidthWorld = Math.max(3, gate.width * SCALE);
@@ -244,6 +254,14 @@ function adaptDoors(rawGates, walls) {
       posT: snap.posT,
       doorWidth: doorWidthWorld,
       doorHeight: 9,
+      // Preserve hinge/strike pixel coords for accurate placement
+      hingeX: hinge.x,
+      hingeY: hinge.y,
+      strikeX: strike.x,
+      strikeY: strike.y,
+      // Swing metadata (from out.json / older gate detection)
+      swingDir: gate.swingDir ?? 1,
+      hingeAngleDeg: gate.hingeAngleDeg ?? null,
     });
   });
 
@@ -266,7 +284,9 @@ export function getCurrentImage() { return _currentImage; }
  */
 export async function fetchImageList() {
   try {
-    const res = await fetch(API_URL.replace('/data', '/images'));
+    // Derive the images endpoint from the data endpoint (works for both relative and absolute URLs)
+    const imagesUrl = API_URL.replace(/\/data$/, '/images');
+    const res = await fetch(imagesUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     return json.images || [];
@@ -302,14 +322,31 @@ export async function fetchFloorPlanData(imageName) {
 // ─── Legacy per-resource exports (kept for backward compatibility) ─────────────
 // main.js calls these; now they just delegate to fetchFloorPlanData.
 
-let _cache = null; // cache so we make only one HTTP request per init
+let _cache = null;        // resolved { walls, windows, doors } object
+let _cacheImage = null;   // which image the cache was built for
+let _cachePromise = null; // in-flight Promise (prevents duplicate fetches)
 
+/**
+ * Returns a Promise that resolves to the cached floor-plan data.
+ * If concurrent callers arrive before the first fetch completes they all
+ * await the SAME Promise — no duplicate network requests.
+ */
 async function _ensureCache(imageName) {
-  if (!_cache || _cache._image !== imageName) {
-    _cache = await fetchFloorPlanData(imageName);
-    _cache._image = imageName;
-  }
-  return _cache;
+  // Cache hit
+  if (_cache && _cacheImage === imageName) return _cache;
+
+  // Another call is already fetching the same image — reuse its Promise
+  if (_cachePromise && _cacheImage === imageName) return _cachePromise;
+
+  // Start a new fetch
+  _cacheImage = imageName;
+  _cachePromise = fetchFloorPlanData(imageName).then(data => {
+    _cache = data;
+    _cachePromise = null;
+    return data;
+  });
+
+  return _cachePromise;
 }
 
 export async function fetchWallData(imageName = _currentImage) {
@@ -328,4 +365,4 @@ export async function fetchDoorData(imageName = _currentImage) {
 }
 
 /** Call before a fresh load to bust the cache. */
-export function clearCache() { _cache = null; }
+export function clearCache() { _cache = null; _cacheImage = null; _cachePromise = null; }

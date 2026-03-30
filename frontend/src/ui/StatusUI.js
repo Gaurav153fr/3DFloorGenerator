@@ -1,13 +1,20 @@
 // src/ui/StatusUI.js
 
-const statusEl = document.getElementById('status');
+// Resolved lazily on first use so this module is safe to import
+// before the DOM is fully parsed (e.g. in bundled entry points).
+let _statusEl = null;
+function getStatusEl() {
+  if (!_statusEl) _statusEl = document.getElementById('status');
+  return _statusEl;
+}
 
 /**
  * Updates the status text in the UI panel.
  * @param {string} message - HTML or plain text to display.
  */
 export function setStatus(message) {
-  if (statusEl) statusEl.innerHTML = message;
+  const el = getStatusEl();
+  if (el) el.innerHTML = message;
 }
 
 /**
