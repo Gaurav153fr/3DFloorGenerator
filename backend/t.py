@@ -9,7 +9,7 @@ def detect_walls(image_path):
     kernel = np.ones((3,3), np.uint8)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-    cv2.imshow("debug_walls", mask)  # Debug: save wall mask
+    # cv2.imshow removed — no GUI in server mode
     return mask
 
 
@@ -153,7 +153,7 @@ def detect_gates_robust(image_path):
                 "width": int(math.sqrt((hinge[0]-tip[0])**2 + (hinge[1]-tip[1])**2))
             })
 
-    cv2.imshow("Final Gate Mask", final_gate_mask)
+    # cv2.imshow removed — no GUI in server mode
     return final_gate_mask, gate_json
 
 # --- HELPER FUNCTIONS ---
@@ -237,22 +237,7 @@ def detect_windows_json(image_path):
                 "width": int(np.sqrt((x1-x2)**2 + (y1-y2)**2))
             })
 
-    # --- 5. DEBUG DRAWING (RED LINES) ---
-    # This loop uses the data EXACTLY as it is stored in the list
-    for win in windows_json:
-        p1 = (win["start"]["x"], win["start"]["y"])
-        p2 = (win["end"]["x"], win["end"]["y"])
-        
-        # Draw a Bright Red line on the original image
-        cv2.line(debug_img, p1, p2, (0, 0, 255), 3)
-        # Optional: Draw a small circle at the start point to see direction
-        cv2.circle(debug_img, p1, 3, (0, 255, 0), -1) 
-
-    # Show the debug window
-    cv2.imshow("API_DATA_VISUAL_CHECK (RED=SENT)", debug_img)
-    cv2.waitKey(0) # Press any key to close and continue to API
-    cv2.destroyAllWindows()
-    
+    # Debug drawing removed for server mode
     return windows_json
 
 def classify_details(image_path='test/F3.png'):
@@ -296,8 +281,6 @@ def classify_details(image_path='test/F3.png'):
             cv2.putText(output, label, (x, y - 5), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
 
-    cv2.imshow("Classified Floor Plan", output)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-# Run the classifier
-classify_details('test/F3.png')
+# Run the classifier only when executed directly
+if __name__ == '__main__':
+    classify_details('test/F3.png')

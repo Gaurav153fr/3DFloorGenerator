@@ -87,8 +87,7 @@ def get_wall_json(image_path):
     return floorplan_json
 
 # --- RUN AND SAVE ---
-output_dict = get_wall_json('test/F2.png')
-
-# Convert dictionary to JSON string and print
-json_string = json.dumps(output_dict, indent=4)
-print(json_string)
+if __name__ == '__main__':
+    output_dict = get_wall_json('test/F2.png')
+    json_string = json.dumps(output_dict, indent=4)
+    print(json_string)

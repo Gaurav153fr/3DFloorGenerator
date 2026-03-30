@@ -412,6 +412,51 @@
         .mat-tag { font-size: 9px; padding: 1px 6px; border-radius: 3px; background: #1a1d2e; color: #6a7090; }
         .mat-note { font-size: 9px; color: #454860; margin: 4px 0 0 8px; font-style: italic; }
 
+        /* Pros / Cons expand panel */
+        .pros-cons-panel {
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height 0.38s cubic-bezier(0.16,1,0.3,1), opacity 0.28s ease;
+            opacity: 0;
+            margin-left: 8px;
+        }
+        .pros-cons-panel.open {
+            max-height: 400px;
+            opacity: 1;
+        }
+        .pros-cons-divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(232,255,71,0.15), transparent);
+            margin: 8px 0;
+        }
+        .pros-cons-title {
+            font-size: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-family: 'IBM Plex Mono', monospace;
+            margin-bottom: 5px;
+        }
+        .pros-cons-title.pros { color: #00d4aa; }
+        .pros-cons-title.cons { color: #ff6b35; }
+        .pros-cons-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 8px 0;
+        }
+        .pros-cons-list li {
+            font-size: 9.5px;
+            line-height: 1.55;
+            padding: 2px 0;
+            display: flex;
+            gap: 6px;
+            align-items: flex-start;
+        }
+        .pros-cons-list.pros li { color: #a8f0dc; }
+        .pros-cons-list.cons li { color: #ffb08a; }
+        .pros-cons-list li::before { flex-shrink: 0; margin-top: 1px; }
+        .pros-cons-list.pros li::before { content: '✦'; color: #00d4aa; font-size: 8px; }
+        .pros-cons-list.cons li::before { content: '✖'; color: #ff6b35; font-size: 8px; }
+
         .concern-box {
             background: rgba(255,100,0,0.07); border: 1px solid rgba(255,100,0,0.25);
             border-radius: 6px; padding: 10px 12px; margin-top: 12px;
@@ -953,6 +998,149 @@
     <script>
         // ── All panel + overview logic in plain JS ─────────────────────────────
 
+        // ── Material Pros / Cons Database ─────────────────────────────────────
+        const MATERIAL_PROS_CONS = {
+            'Reinforced Concrete (M25)': {
+                pros: [
+                    'Extremely high compressive strength — ideal for load-bearing walls and slabs',
+                    'Excellent fire resistance, maintaining structural integrity up to 300°C',
+                    'Long service life (50–100 years) with minimal maintenance',
+                    'Versatile — can be cast into any shape or section',
+                    'Good sound insulation and thermal mass for energy efficiency'
+                ],
+                cons: [
+                    'High construction cost — both material and skilled labour',
+                    'Heavy self-weight increases foundation load and seismic forces',
+                    'Cracks if not properly cured or if rebar corrodes over time'
+                ]
+            },
+            'Reinforced Concrete (M30)': {
+                pros: [
+                    'Higher grade concrete offers superior compressive strength (30 MPa)',
+                    'Better durability in aggressive environments (coastal, chemical exposure)',
+                    'Reduced section sizes possible — saves floor area',
+                    'Lower permeability reduces rebar corrosion risk',
+                    'Preferred for high-rise and bridge-class structures'
+                ],
+                cons: [
+                    'More expensive mix design and stricter quality control required',
+                    'Requires proper curing regime — premature drying causes micro-cracks',
+                    'Heavier than alternative materials like steel or timber'
+                ]
+            },
+            'AAC Block Wall': {
+                pros: [
+                    'Lightweight — reduces dead load on structure by up to 50% vs brick',
+                    'Excellent thermal insulation — lowers HVAC energy consumption',
+                    'Fire resistant up to 4 hours (non-combustible material)',
+                    'Easy to cut and shape on-site — reduces construction waste',
+                    'Fast construction — large block size covers more area quickly'
+                ],
+                cons: [
+                    'Low compressive strength — not suitable for load-bearing use without frame',
+                    'Water absorption can weaken blocks if not properly plastered',
+                    'Requires specialised mortar (thin-bed) for proper bonding'
+                ]
+            },
+            'Fly Ash Brick': {
+                pros: [
+                    'Uses industrial waste (fly ash) — environmentally sustainable choice',
+                    'Uniform size and smooth surface reduces plaster thickness',
+                    'Good compressive strength (7–10 MPa) for partition walls',
+                    'Low water absorption compared to traditional clay bricks',
+                    'Cost-effective — typically 20–30% cheaper than red clay bricks'
+                ],
+                cons: [
+                    'Brittle — prone to chipping at corners during handling',
+                    'Requires skilled masonry for tight jointing',
+                    'Not suitable as a standalone load-bearing material for tall structures'
+                ]
+            },
+            'Hollow Block (Concrete)': {
+                pros: [
+                    'Hollow core provides natural insulation and reduces overall weight',
+                    'Fast to lay — large modules reduce construction time',
+                    'Good sound attenuation between rooms',
+                    'Cores can be filled with concrete/rebar for added strength',
+                    'Dimensionally accurate — reduces finishing time and plaster'
+                ],
+                cons: [
+                    'Lower solid section area reduces strength vs solid block',
+                    'Fragile face shells — care needed during transport and fixing',
+                    'Limited aesthetic appeal without surface treatment'
+                ]
+            },
+            'Steel Frame (MS)': {
+                pros: [
+                    'Highest strength-to-weight ratio among structural materials',
+                    'Factory prefabricated — rapid on-site erection',
+                    'Ductile behaviour under seismic loads — absorbs energy without collapse',
+                    'Recyclable — 90%+ of structural steel is recovered at end of life',
+                    'Precisely engineered — predictable and reliable structural performance'
+                ],
+                cons: [
+                    'Requires fireproofing coat — bare steel loses strength above 550°C',
+                    'Prone to corrosion without protective paint or galvanising',
+                    'High initial cost compared to concrete or masonry'
+                ]
+            },
+            'Brick Masonry': {
+                pros: [
+                    'Proven, time-tested material with centuries of structural performance',
+                    'Good compressive strength under vertical loads',
+                    'Excellent thermal mass — stabilises indoor temperature swings',
+                    'Naturally fire-resistant and non-combustible',
+                    'Widely available and well understood by local labour'
+                ],
+                cons: [
+                    'Heavy — significantly increases foundation and structural loads',
+                    'Poor tensile and shear strength — needs reinforcing in seismic zones',
+                    'Labour-intensive — slow construction speed'
+                ]
+            },
+            'Precast Concrete Panel': {
+                pros: [
+                    'Factory-controlled quality — superior surface finish and consistency',
+                    'Rapid installation — panels are crane-lifted into position',
+                    'High compressive strength and durability',
+                    'Reduces on-site formwork and wet work significantly',
+                    'Suitable for repetitive large-scale construction (apartments, warehouses)'
+                ],
+                cons: [
+                    'High initial transport and crane cost',
+                    'Requires precise structural connections — engineering-intensive',
+                    'Limited flexibility for design changes after manufacturing'
+                ]
+            }
+        };
+
+        // Fallback pros/cons for unrecognised materials
+        const DEFAULT_PROS_CONS = {
+            pros: [
+                'Proven structural performance in standard construction conditions',
+                'Cost-effective within its intended application range',
+                'Compatible with conventional construction methods and local labour',
+                'Acceptable thermal and acoustic performance for interior walls',
+                'Readily available through standard supply chains'
+            ],
+            cons: [
+                'Performance may vary based on mix quality or workmanship',
+                'Check compatibility with local seismic and climate zone requirements',
+                'Confirm fire rating requirements with structural engineer'
+            ]
+        };
+
+        function getProsCons(materialName) {
+            if (!materialName) return DEFAULT_PROS_CONS;
+            // Try exact match first, then partial
+            if (MATERIAL_PROS_CONS[materialName]) return MATERIAL_PROS_CONS[materialName];
+            const key = Object.keys(MATERIAL_PROS_CONS).find(k =>
+                materialName.toLowerCase().includes(k.toLowerCase()) ||
+                k.toLowerCase().includes(materialName.toLowerCase())
+            );
+            return key ? MATERIAL_PROS_CONS[key] : DEFAULT_PROS_CONS;
+        }
+
         const DOT_COLORS = {
             load_bearing_wall: 'var(--lb-col)',
             partition_wall:    'var(--pt-col)',
@@ -1021,10 +1209,11 @@
             // Material option cards
             const optLabels = ['Best Option', 'Option 2', 'Option 3'];
             const recs = (el.recommendations || []).slice(0, 3).map((r, i) => `
-        <div class="mat-card rank-${i+1}">
+        <div class="mat-card rank-${i+1}" data-mat-idx="${i}">
             <div class="mat-rank-stripe stripe-${i+1}"></div>
             <div style="margin-left:8px;margin-bottom:4px">
                 <span style="font-size:8px;text-transform:uppercase;letter-spacing:0.5px;color:${i===0?'var(--accent)':'var(--muted)'};font-family:'IBM Plex Mono',monospace">${optLabels[i]}</span>
+                <span style="float:right;font-size:8px;color:var(--muted);font-family:'IBM Plex Mono',monospace">Click to expand ▾</span>
             </div>
             <div class="mat-top">
                 <span class="mat-name">${r.material}</span>
@@ -1040,6 +1229,13 @@
                 <span class="mat-tag">Dur: ${r.durability_label}</span>
             </div>
             <div class="mat-note">${r.notes}</div>
+            <div class="pros-cons-panel">
+                <div class="pros-cons-divider"></div>
+                <div class="pros-cons-title pros">✦ 5 Advantages</div>
+                <ul class="pros-cons-list pros"></ul>
+                <div class="pros-cons-title cons">✖ Disadvantages</div>
+                <ul class="pros-cons-list cons"></ul>
+            </div>
         </div>`).join('');
 
             const STR_MAP = {'Low':1,'Medium':2,'Medium–High':2.5,'High':3,'Very High':4};
@@ -1341,20 +1537,48 @@
                     const rec = recs[i];
                     if (!rec) return;
 
+                    // Populate pros/cons lists in the DOM
+                    const pc = getProsCons(rec.material);
+                    const prosList = card.querySelector('.pros-cons-list.pros');
+                    const consList = card.querySelector('.pros-cons-list.cons');
+                    if (prosList) {
+                        prosList.innerHTML = pc.pros.map(p => `<li>${p}</li>`).join('');
+                    }
+                    if (consList) {
+                        consList.innerHTML = pc.cons.map(c => `<li>${c}</li>`).join('');
+                    }
+
+                    // Hover → show radar chart (unchanged)
                     card.addEventListener('mouseenter', () => {
                         if (!_popupPinned) showChartPopup(rec, card, STR_MAP, DUR_MAP, CST_MAP, i);
                     });
                     card.addEventListener('mouseleave', () => {
                         if (!_popupPinned) hideChartPopup();
                     });
+
+                    // Click → toggle inline pros/cons AND pin/unpin radar
                     card.addEventListener('click', (e) => {
                         e.stopPropagation();
-                        if (_popupPinned && lastPinnedIndex === i) {
-                            // same card clicked again → unpin
+                        const panel = card.querySelector('.pros-cons-panel');
+                        const isOpen = panel && panel.classList.contains('open');
+
+                        // Close all other cards
+                        document.querySelectorAll('.pros-cons-panel.open').forEach(p => p.classList.remove('open'));
+                        document.querySelectorAll('.mat-card').forEach(c => {
+                            const lbl = c.querySelector('[style*="float:right"]');
+                            if (lbl) lbl.textContent = 'Click to expand ▾';
+                        });
+
+                        if (isOpen) {
+                            // Was open → close everything
                             _popupPinned = false;
                             lastPinnedIndex = -1;
                             hideChartPopup();
                         } else {
+                            // Open this one
+                            if (panel) panel.classList.add('open');
+                            const lbl = card.querySelector('[style*="float:right"]');
+                            if (lbl) lbl.textContent = 'Click to collapse ▴';
                             _popupPinned = true;
                             lastPinnedIndex = i;
                             showChartPopup(rec, card, STR_MAP, DUR_MAP, CST_MAP, i);
@@ -1369,6 +1593,11 @@
                         _popupPinned = false;
                         lastPinnedIndex = -1;
                         hideChartPopup();
+                        document.querySelectorAll('.pros-cons-panel.open').forEach(p => p.classList.remove('open'));
+                        document.querySelectorAll('.mat-card').forEach(c => {
+                            const lbl = c.querySelector('[style*="float:right"]');
+                            if (lbl) lbl.textContent = 'Click to expand ▾';
+                        });
                     }
                 }, { capture: true });
             }, 0);

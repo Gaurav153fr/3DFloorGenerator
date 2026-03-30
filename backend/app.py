@@ -7,16 +7,16 @@ from t import detect_gates_robust, detect_windows_json
 from main import get_Cordinates as get_classified_walls
 from material_analysis import MaterialAnalyser, StructuralElement, build_explainability_prompt
 import google.generativeai as genai
-from dotenv import load_dotenv
-import os
+# from dotenv import load_dotenv
+# import os
 
-load_dotenv()  # loads .env file
+# load_dotenv()  # loads .env file
 
-api_key = os.getenv("API_KEY")
+# api_key = os.getenv("API_KEY")
 
 
 
-GEMINI_API_KEY = api_key
+GEMINI_API_KEY = "Your_API_KEY_here"
 genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel("gemini-2.5-flash")
 
@@ -165,16 +165,30 @@ def chat():
         el       = body.get('element', {})
 
         prompt = f"""
-        You are an AI Structural Engineer. Answer the user's question about a floor plan element.
-        CONTEXT:
-        Element ID: {el.get('element_id')}
-        Type: {el.get('element_type')}
-        Span: {el.get('span_m')} meters
-        Current Materials: {el.get('recommendations', [{}])[0].get('material', 'None')}
+        You are a highly experienced Structural Engineer and Construction Expert with 20+ years of field expertise.
+        Answer the user's question about the floor plan element below.
+
+        ELEMENT CONTEXT:
+        - Element ID     : {el.get('element_id')}
+        - Type           : {el.get('element_type')}
+        - Span           : {el.get('span_m')} meters
+        - Current Material: {el.get('recommendations', [{}])[0].get('material', 'None')}
 
         USER QUESTION: {question}
 
-        Answer professionally in 2-3 sentences. Cite structural safety where applicable.
+        RESPONSE RULES (follow strictly):
+        1. Always answer in clear, numbered bullet points — no paragraphs.
+        2. Be direct and confident. Never use uncertain language like "it depends", "maybe", or "could be". State facts decisively.
+        3. Dedicate at least one bullet point to a detailed "Why?" explanation — explain the structural or engineering reasoning behind every recommendation.
+        4. Where relevant, cite structural safety standards, material properties, or load-bearing principles.
+        5. End with a one-line "Bottom Line:" summary that gives a definitive recommendation.
+
+        FORMAT EXAMPLE:
+        • Point 1 — direct factual statement.
+        • Point 2 — next key fact.
+        • Why? — detailed engineering reason explaining the cause, mechanism, or structural logic.
+        • Safety Note — any critical safety consideration.
+        • Bottom Line: Clear, confident final recommendation.
         """
 
         response = gemini_model.generate_content(prompt)
