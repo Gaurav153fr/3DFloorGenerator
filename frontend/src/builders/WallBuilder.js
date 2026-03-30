@@ -2,17 +2,6 @@
 import * as THREE from 'three';
 import { SCALE, WALL_HEIGHT, WALL_THICKNESS, MATERIALS } from '../config/constants.js';
 
-// Reuse a single material across all walls for better performance
-const wallMaterial = new THREE.MeshStandardMaterial({
-  color: MATERIALS.WALL.COLOR,
-  roughness: MATERIALS.WALL.ROUGHNESS,
-  metalness: MATERIALS.WALL.METALNESS,
-  // Polygon offset pushes wall surfaces slightly back in the depth buffer so
-  // frames, glass and door panels that sit on the same plane always win.
-  polygonOffset: true,
-  polygonOffsetFactor: 2,
-  polygonOffsetUnits: 2,
-});
 
 // ─── Low-level segment helper ─────────────────────────────────────────────────
 
@@ -27,9 +16,10 @@ const wallMaterial = new THREE.MeshStandardMaterial({
  * @param {number}  localEnd   – distance along wall where segment ends
  * @param {number}  yBottom  – bottom Y of segment (world units)
  * @param {number}  yTop     – top    Y of segment (world units)
+ * @param {number}  [color]  – optional hex color override (e.g. 0xff6b35)
  * @returns {THREE.Mesh}
  */
-function makeWallSegment(scene, ox, oz, angle, localStart, localEnd, yBottom, yTop) {
+function makeWallSegment(scene, ox, oz, angle, localStart, localEnd, yBottom, yTop, color) {
   const segLen = localEnd   - localStart;
   const segH   = yTop       - yBottom;
   if (segLen < 0.01 || segH < 0.01) return null;
@@ -40,8 +30,17 @@ function makeWallSegment(scene, ox, oz, angle, localStart, localEnd, yBottom, yT
   const cosA = Math.cos(angle);
   const sinA = Math.sin(angle);
 
+  const mat = new THREE.MeshStandardMaterial({
+    color:     color ?? MATERIALS.WALL.COLOR,
+    roughness: MATERIALS.WALL.ROUGHNESS,
+    metalness: MATERIALS.WALL.METALNESS,
+    polygonOffset: true,
+    polygonOffsetFactor: 2,
+    polygonOffsetUnits: 2,
+  });
+
   const geo  = new THREE.BoxGeometry(segLen, segH, WALL_THICKNESS);
-  const mesh = new THREE.Mesh(geo, wallMaterial);
+  const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(ox + cosA * localCentre, yCentre, oz + sinA * localCentre);
   mesh.rotation.y  = -angle;
   mesh.castShadow    = true;
@@ -61,7 +60,7 @@ function makeWallSegment(scene, ox, oz, angle, localStart, localEnd, yBottom, yT
  * @param {{ x: number, y: number }} end
  * @returns {THREE.Mesh[]}
  */
-export function createWall(scene, start, end) {
+export function createWall(scene, start, end, color) {
   const x1 = start.x * SCALE, z1 = start.y * SCALE;
   const x2 = end.x   * SCALE, z2 = end.y   * SCALE;
   const dx = x2 - x1, dz = z2 - z1;
@@ -69,7 +68,7 @@ export function createWall(scene, start, end) {
   if (L < 0.1) return [];
 
   const angle = Math.atan2(dz, dx);
-  const mesh  = makeWallSegment(scene, x1, z1, angle, 0, L, 0, WALL_HEIGHT);
+  const mesh  = makeWallSegment(scene, x1, z1, angle, 0, L, 0, WALL_HEIGHT, color);
   return mesh ? [mesh] : [];
 }
 
@@ -94,7 +93,7 @@ export function buildWalls(scene, wallData) {
  *   All dimensions in WORLD units (already scaled); posT is 0-1 along the wall.
  * @returns {THREE.Mesh[]}  new mesh list
  */
-export function rebuildWallWithOpenings(scene, wallInfo, oldMeshes, openings) {
+export function rebuildWallWithOpenings(scene, wallInfo, oldMeshes, openings, color) {
   // ── Remove old meshes ──
   oldMeshes.forEach(m => scene.remove(m));
 
@@ -113,7 +112,7 @@ export function rebuildWallWithOpenings(scene, wallInfo, oldMeshes, openings) {
   const newMeshes = [];
 
   const add = (ls, le, yb, yt) => {
-    const m = makeWallSegment(scene, x1, z1, angle, ls, le, yb, yt);
+    const m = makeWallSegment(scene, x1, z1, angle, ls, le, yb, yt, color);
     if (m) newMeshes.push(m);
   };
 

@@ -4,7 +4,9 @@ export const SCALE = 0.2;
 export const WALL_HEIGHT = 12;
 export const WALL_THICKNESS = 1.2;
 
-export const API_URL = 'http://127.0.0.1:5000/api/data';
+export const API_URL          = 'http://127.0.0.1:5000/api/data';
+export const MATERIAL_API_URL = 'http://127.0.0.1:5000/api/material-analysis';
+export const CHAT_API_URL     = 'http://127.0.0.1:5000/api/chat';
 
 export const CAMERA = {
   FOV: 60,

@@ -3,11 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>3D Floor Plan Generator</title>
-    <meta name="description" content="Interactive 3D floor plan generator — upload any floor plan PNG and get a real-time 3D model powered by OpenCV + Three.js" />
+    <title>3D Floor Plan · Structural Intelligence</title>
+    <meta name="description" content="Interactive 3D floor plan generator with structural material analysis and AI chatbot — powered by OpenCV, Three.js and Gemini" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/src/styles/main.css" />
+    <link rel="stylesheet" href="/src/styles/structural.css" />
+    <!-- Chart.js required for material score radar charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <style>
       /* ── Loading Overlay ── */
       #loading-overlay {
