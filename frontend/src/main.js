@@ -863,6 +863,51 @@ function wireButtons() {
     const val = imageSelect.value;
     if (val) loadFloorPlan(val);
   });
+
+  // Image upload
+  const uploadInput = document.getElementById('upload-input');
+  const uploadBtn = document.getElementById('upload-btn');
+  
+  uploadBtn?.addEventListener('click', () => {
+    uploadInput?.click();
+  });
+  
+  uploadInput?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    showLoading('Uploading image...');
+    try {
+      const res = await fetch('http://localhost:5000/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      
+      if (data.status === 'success') {
+        // Add to dropdown
+        const option = document.createElement('option');
+        option.value = data.image;
+        option.textContent = data.image;
+        imageSelect.appendChild(option);
+        imageSelect.value = data.image;
+        
+        // Render it
+        loadFloorPlan(data.image);
+      } else {
+        alert('Upload failed: ' + data.message);
+      }
+    } catch (err) {
+      alert('Upload error: ' + err.message);
+    } finally {
+      // Clear input so same file can be selected again
+      uploadInput.value = '';
+      hideLoading();
+    }
+  });
 }
 
 // ─── 2D mask refresh helper ───────────────────────────────────────────────────

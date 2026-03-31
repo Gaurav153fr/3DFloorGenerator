@@ -312,7 +312,7 @@ function showChartPopup(rec, cardEl, rankIndex) {
   if (_chartInstance) { _chartInstance.destroy(); _chartInstance = null; }
   const ctx = canvas.getContext('2d');
 
-  const axisColors = ['#ff6b35', '#00d4aa', '#bf5af2', '#e8ff47'];
+  const axisColors = ['#ff6b35', '#00d4aa', '#bf5af2', '#60a5fa'];
 
   const spokeColorPlugin = {
     id: 'spokeColors',
@@ -373,7 +373,7 @@ function showChartPopup(rec, cardEl, rankIndex) {
           backgroundColor: '#0d0f20',
           borderColor: 'rgba(232,255,71,0.35)',
           borderWidth: 1,
-          titleColor: '#e8ff47',
+          titleColor: '#60a5fa',
           bodyColor: '#c8ccd8',
           padding: 10,
           callbacks: { label: (c3) => ` ${c3.parsed.r.toFixed(2)} / 4.00` },
