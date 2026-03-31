@@ -26,7 +26,7 @@ This project combines computer vision, geometric reconstruction, 3D rendering, a
 * 🧠 **Structural & Material Analysis**
 
   * Differentiates between load-bearing and non-load-bearing elements
-  * Evaluates materials (RCC, steel, brick, etc.)
+  * Evaluates materials (Brick, steel, RCC, etc.)
   * Scores materials based on:
 
     * Strength
@@ -86,9 +86,9 @@ This project combines computer vision, geometric reconstruction, 3D rendering, a
   * Non-load-bearing partitions
 * Evaluates material options:
 
-  * RCC
-  * Steel
   * Brick
+  * Steel
+  * RCC
 * Computes a composite score based on:
 
   * Structural strength
